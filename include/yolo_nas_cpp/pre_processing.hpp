@@ -19,18 +19,19 @@ class PreProcessingStep;
  * @brief Implements a configurable image preprocessing pipeline for object detection
  *
  * The PreProcessing class constructs a sequence of image processing operations
- * from a JSON configuration and applies them in order to prepare images for
- * object detection networks.
+ * from a JSON configuration
  */
 class PreProcessing
 {
 public:
   /**
    * @brief Construct a preprocessing pipeline from JSON configuration
-   * @param preprocessing_config JSON array containing processing step configurations
-   * @throws std::runtime_error if the configuration is invalid
+   * @param config JSON array containing processing step configurations.
+   *               Each element should be an object with a single key (the step name)
+   *               and a value containing the parameters for that step.
+   * @throws std::runtime_error if the configuration is invalid or a step fails creation/parsing.
    */
-  explicit PreProcessing(const json & preprocessing_config);
+  explicit PreProcessing(const json & config);
 
   /**
    * @brief Run the preprocessing pipeline on an input image
@@ -68,6 +69,17 @@ public:
    * @return Step name
    */
   virtual std::string name() const = 0;
+
+  /**
+   * @brief Factory method to create preprocessing steps from JSON config
+   * @param step_name Name of the step (e.g., "StandardizeImage")
+   * @param params JSON parameters for the step
+   * @return A unique pointer to the created step
+   * @throws std::runtime_error if the step_name is unknown or parameters are invalid
+   *                            (via the specific step's constructor).
+   */
+  static std::unique_ptr<PreProcessingStep> create_from_json(
+    const std::string & step_name, const json & params);
 };
 
 /**
@@ -77,12 +89,7 @@ public:
 class StandardizeImage : public PreProcessingStep
 {
 public:
-  /**
-   * @brief Constructor
-   * @param max_value The maximum value to scale by (e.g., 255.0 for 8-bit images)
-   */
-  explicit StandardizeImage(double max_value);
-
+  explicit StandardizeImage(const json & params);
   void apply(const cv::Mat & input, cv::Mat & output) const override;
   std::string name() const override;
 
@@ -97,14 +104,7 @@ private:
 class NormalizeImage : public PreProcessingStep
 {
 public:
-  /**
-   * @brief Constructor
-   * @param mean Vector of mean values for each channel
-   * @param std Vector of standard deviation values for each channel
-   * @throws std::runtime_error if mean or std vectors don't have exactly 3 elements
-   */
-  NormalizeImage(std::vector<double> mean, std::vector<double> std);
-
+  explicit NormalizeImage(const json & params);
   void apply(const cv::Mat & input, cv::Mat & output) const override;
   std::string name() const override;
 
@@ -120,13 +120,7 @@ private:
 class DetectionCenterPadding : public PreProcessingStep
 {
 public:
-  /**
-   * @brief Constructor
-   * @param pad_value Value to use for padding pixels
-   * @param out_shape Target output shape
-   */
-  DetectionCenterPadding(int pad_value, const cv::Size & out_shape);
-
+  explicit DetectionCenterPadding(const json & params);
   void apply(const cv::Mat & input, cv::Mat & output) const override;
   std::string name() const override;
 
@@ -142,13 +136,7 @@ private:
 class DetectionBottomRightPadding : public PreProcessingStep
 {
 public:
-  /**
-   * @brief Constructor
-   * @param pad_value Value to use for padding pixels
-   * @param out_shape Target output shape
-   */
-  DetectionBottomRightPadding(int pad_value, const cv::Size & out_shape);
-
+  explicit DetectionBottomRightPadding(const json & params);
   void apply(const cv::Mat & input, cv::Mat & output) const override;
   std::string name() const override;
 
@@ -159,18 +147,12 @@ private:
 
 /**
  * @class ImagePermute
- * @brief Permutes the dimensions of a multi-dimensional array
+ * @brief Permutes the dimensions of an image (typically HWC to CHW)
  */
 class ImagePermute : public PreProcessingStep
 {
 public:
-  /**
-   * @brief Constructor
-   * @param order Vector specifying the new order of dimensions
-   * @throws std::runtime_error if order is not a valid permutation
-   */
-  explicit ImagePermute(std::vector<int> order);
-
+  explicit ImagePermute(const json & params);
   void apply(const cv::Mat & input, cv::Mat & output) const override;
   std::string name() const override;
 
@@ -185,17 +167,12 @@ private:
 class DetectionLongestMaxSizeRescale : public PreProcessingStep
 {
 public:
-  /**
-   * @brief Constructor
-   * @param out_shape Target output shape
-   */
-  explicit DetectionLongestMaxSizeRescale(const cv::Size & out_shape);
-
+  explicit DetectionLongestMaxSizeRescale(const json & params);
   void apply(const cv::Mat & input, cv::Mat & output) const override;
   std::string name() const override;
 
 private:
-  cv::Size out_shape_;
+  cv::Size out_shape_;  // Note: cv::Size is (width, height)
 };
 
 /**
@@ -205,17 +182,12 @@ private:
 class DetectionRescale : public PreProcessingStep
 {
 public:
-  /**
-   * @brief Constructor
-   * @param out_shape Target output shape
-   */
-  explicit DetectionRescale(const cv::Size & out_shape);
-
+  explicit DetectionRescale(const json & params);
   void apply(const cv::Mat & input, cv::Mat & output) const override;
   std::string name() const override;
 
 private:
-  cv::Size out_shape_;
+  cv::Size out_shape_;  // Note: cv::Size is (width, height)
 };
 
 }  // namespace yolo_nas_cpp
