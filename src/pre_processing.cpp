@@ -30,7 +30,8 @@ std::unique_ptr<PreProcessingStep> PreProcessingStep::create_from_json(
   } else if (step_name == "DetectionBottomRightPadding") {
     return std::make_unique<DetectionBottomRightPadding>(params);
   } else if (step_name == "ImagePermute") {
-    return std::make_unique<ImagePermute>(params);
+    // this is handled as HWC -> CHW in the network before inference
+    return std::make_unique<PassthroughStep>(params);
   } else if (step_name == "DetectionLongestMaxSizeRescale") {
     return std::make_unique<DetectionLongestMaxSizeRescale>(params);
   } else if (step_name == "DetectionRescale") {
@@ -242,92 +243,18 @@ void DetectionBottomRightPadding::apply(const cv::Mat & input, cv::Mat & output)
 
 std::string DetectionBottomRightPadding::name() const { return "DetectionBottomRightPadding"; }
 
-// ImagePermute implementation
-ImagePermute::ImagePermute(const json & params)
+PassthroughStep::PassthroughStep(const json & /*params*/)
 {
-  try {
-    order_ = params.at("order").get<std::vector<int>>();
-
-    // Check if order is the specifically implemented PyTorch conversion [2,0,1] (HWC->CHW)
-    if (order_.size() != 3 || order_[0] != 2 || order_[1] != 0 || order_[2] != 1) {
-      throw std::invalid_argument(
-        "Only permutation order [2,0,1] (HWC->CHW) is currently implemented for ImagePermute.");
-    }
-  } catch (const json::exception & e) {
-    throw std::runtime_error("Error parsing parameters for ImagePermute: " + std::string(e.what()));
-  }
+  // Constructor body is empty, parameters are ignored.
 }
 
-void ImagePermute::apply(const cv::Mat & input, cv::Mat & output) const
+void PassthroughStep::apply(const cv::Mat & input, cv::Mat & output) const
 {
-  // Ensure input is 3-channel HWC format expected for [2,0,1] permutation
-  if (input.channels() != 3 || input.dims > 2) {
-    throw std::runtime_error(
-      "ImagePermute::apply with order [2,0,1] expects a 3-channel HWC input cv::Mat.");
-  }
-
-  const int H = input.rows;
-  const int W = input.cols;
-  const int C = input.channels();
-
-  // Create output Mat with dimensions [C, H, W] and same depth as input
-  // Note: OpenCV's Mat interpretation is different from pure numpy-style NCHW.
-  // cv::dnn::blobFromImage handles this conversion correctly.
-  // This manual implementation might be slow and less robust.
-  // Consider using cv::dnn::blobFromImage if possible.
-  // If manual permutation is strictly needed:
-  int sizes[] = {C, H, W};
-  output.create(3, sizes, input.depth());  // Create a 3D Mat (Channels, Height, Width)
-
-  // Create views for each channel in the output Mat
-  std::vector<cv::Mat> output_channels;
-  for (int i = 0; i < C; ++i) {
-    // Create a Mat header for the i-th channel slice in the 3D Mat
-    // Note: This assumes data is contiguous in the C dimension first.
-    // This might require careful handling depending on how Mat allocates 3D data.
-    // A safer (but potentially slower) way is manual copying element by element.
-    // The original code used element-wise copy, let's stick to that for correctness.
-    // The performance might be an issue for large images.
-  }
-
-  // Split input into separate channel planes (more reliable)
-  std::vector<cv::Mat> input_channels(C);
-  cv::split(input, input_channels);
-
-  // Copy the data with the new arrangement [C, H, W]
-  // This loop assumes output is CV_MAKETYPE(input.depth(), 1) which might not be right
-  // Let's stick to the safer element-wise copy from the original code, ensuring type safety.
-
-  // Re-create output with the correct dimensions and type
-  output.create(
-    3, sizes,
-    input.type());  // Use input.type() to preserve channels in type info for element access
-
-  size_t elem_size =
-    input.elemSize1();  // Size of one element in bytes (e.g., 1 for uchar, 4 for float)
-  uchar * output_ptr = output.ptr<uchar>();
-
-  for (int c = 0; c < C; ++c) {
-    cv::Mat plane = input_channels[c];  // This is HxW single channel
-    size_t plane_step = plane.step;     // Bytes per row in the plane
-    uchar * plane_ptr = plane.ptr<uchar>();
-    for (int h = 0; h < H; ++h) {
-      uchar * row_ptr = plane_ptr + h * plane_step;
-      for (int w = 0; w < W; ++w) {
-        // Calculate the output address: output[c, h, w]
-        // For C,H,W layout, index is c * (H*W) + h * W + w
-        size_t output_idx = static_cast<size_t>(c) * H * W + static_cast<size_t>(h) * W + w;
-        // Copy element bytes
-        std::memcpy(output_ptr + output_idx * elem_size, row_ptr + w * elem_size, elem_size);
-      }
-    }
-  }
-  // Note: The resulting 'output' Mat has a 3D structure but OpenCV functions
-  // might not interpret it as CHW directly. cv::dnn::blobFromImage is preferred
-  // if the target is a DNN framework expecting NCHW format.
+  // Perform a shallow copy: output header points to input data buffer.
+  output = input;
 }
 
-std::string ImagePermute::name() const { return "ImagePermute"; }
+std::string PassthroughStep::name() const { return "PassthroughStep"; }
 
 DetectionLongestMaxSizeRescale::DetectionLongestMaxSizeRescale(const json & params)
 {

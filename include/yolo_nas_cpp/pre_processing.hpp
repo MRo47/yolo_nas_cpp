@@ -146,18 +146,31 @@ private:
 };
 
 /**
- * @class ImagePermute
- * @brief Permutes the dimensions of an image (typically HWC to CHW)
+ * @class PassthroughStep
+ * @brief A preprocessing step that performs no operation and passes the input directly to the output.
+ *        Used to gracefully handle unsupported steps found in configuration without erroring.
  */
-class ImagePermute : public PreProcessingStep
+class PassthroughStep : public PreProcessingStep
 {
 public:
-  explicit ImagePermute(const json & params);
-  void apply(const cv::Mat & input, cv::Mat & output) const override;
-  std::string name() const override;
+  /**
+   * @brief Constructor. Ignores any provided parameters.
+   * @param params JSON parameters (ignored).
+   */
+  explicit PassthroughStep(const json & /*params*/);  // Mark params as unused
 
-private:
-  std::vector<int> order_;
+  /**
+   * @brief Apply the passthrough step. Makes output refer to the same data as input.
+   * @param input Input image.
+   * @param output Output image (will share data with input).
+   */
+  void apply(const cv::Mat & input, cv::Mat & output) const override;
+
+  /**
+   * @brief Get the name of the processing step.
+   * @return Step name ("PassthroughStep").
+   */
+  std::string name() const override;
 };
 
 /**
