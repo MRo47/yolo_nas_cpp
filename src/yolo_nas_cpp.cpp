@@ -3,6 +3,7 @@
 #include <opencv2/opencv.hpp>
 #include <string>
 
+#include "yolo_nas_cpp/post_processing.hpp"
 #include "yolo_nas_cpp/pre_processing.hpp"
 
 int main(int argc, char ** argv)
@@ -27,6 +28,8 @@ int main(int argc, char ** argv)
   std::cout << "Preprocessed Image dims"
             << "\nrows:" << preprocessed_image.rows << "\ncols:" << preprocessed_image.cols
             << "\nchannels:" << preprocessed_image.channels() << std::endl;
+
+  yolo_nas_cpp::PostProcessing post_process(config["post_processing"], config["pre_processing"]);
 
   cv::namedWindow("Preprocessed Image", cv::WINDOW_NORMAL);
   cv::imshow("Preprocessed Image", preprocessed_image);

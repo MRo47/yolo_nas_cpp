@@ -6,11 +6,12 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Find OpenCV (require at least core and imgproc, adjust if needed)
-find_package(OpenCV REQUIRED core imgproc highgui imgcodecs)
+find_package(OpenCV REQUIRED core imgproc highgui imgcodecs dnn)
 
 # Define the library
 add_library(yolo_nas_cpp
     src/pre_processing.cpp
+    src/post_processing.cpp
 )
 
 # Include directories for consumers
