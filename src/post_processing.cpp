@@ -56,14 +56,14 @@ PostProcessing::PostProcessing(
 
     try {
       if (step_name == "DetectionLongestMaxSizeRescale" || step_name == "DetectionRescale") {
-        // This step rescaled the image TO a certain size.
+        // This step rescaled the image to a certain size.
         cv::Size processed_size = parse_cv_size(params.at("output_shape"));
         post_processing_steps_.push_back(std::make_unique<UndoRescaleBoxes>(processed_size));
         std::cout << "  + Added inverse step: UndoRescaleBoxes (for " << step_name << ")"
                   << std::endl;
 
       } else if (step_name == "DetectionCenterPadding") {
-        // This step padded the image TO a certain size using center padding.
+        // This step padded the image to a certain size using center padding.
         cv::Size padded_size = parse_cv_size(params.at("output_shape"));
         post_processing_steps_.push_back(
           std::make_unique<UndoPaddingBoxes>(padded_size, UndoPaddingBoxes::PaddingType::CENTER));
@@ -92,37 +92,18 @@ PostProcessing::PostProcessing(
             << " steps." << std::endl;
 }
 
-// --- PostProcessing Run Method ---
-DetectionData PostProcessing::run(
-  const std::vector<cv::Rect2d> & initial_boxes, const std::vector<float> & initial_scores,
-  const std::vector<int> & initial_class_ids, const cv::Size & original_image_size)
+void PostProcessing::run(DetectionData & data, const cv::Size & original_image_size)
 {
-  if (
-    initial_boxes.size() != initial_scores.size() ||
-    initial_boxes.size() != initial_class_ids.size()) {
+  if (data.boxes.size() != data.scores.size() || data.boxes.size() != data.class_ids.size()) {
     throw std::runtime_error(
-      "PostProcessing input vectors (boxes, scores, class_ids) must have the same size.");
+      "PostProcessing::run input data vectors (boxes, scores, class_ids) must have the same size.");
   }
 
-  // Initialize DetectionData
-  DetectionData data;
-  data.boxes = initial_boxes;
-  data.scores = initial_scores;
-  data.class_ids = initial_class_ids;
-  data.kept_indices.resize(initial_boxes.size());
-  std::iota(data.kept_indices.begin(), data.kept_indices.end(), 0);  // Fill with 0, 1, 2, ...
-
-  // Apply steps sequentially
   for (const auto & step : post_processing_steps_) {
-    // std::cout << "Applying post-processing step: " << step->name() << std::endl; // Debugging
     step->apply(data, original_image_size);
   }
-
-  // The 'data' struct now contains the final results
-  return data;
 }
 
-// --- NonMaximumSuppression Implementation ---
 NonMaximumSuppression::NonMaximumSuppression(float conf_threshold, float iou_threshold)
 : conf_threshold_(conf_threshold), iou_threshold_(iou_threshold)
 {

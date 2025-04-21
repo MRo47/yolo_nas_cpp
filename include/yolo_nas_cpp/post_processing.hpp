@@ -1,12 +1,12 @@
 #pragma once
 
-#include <memory>  // For std::unique_ptr
+#include <memory>
 #include <nlohmann/json.hpp>
 #include <opencv2/core.hpp>
 #include <string>
 #include <vector>
 
-#include "yolo_nas_cpp/detection_data.hpp"  // Include the data structure
+#include "yolo_nas_cpp/detection_data.hpp"
 
 namespace yolo_nas_cpp
 {
@@ -36,17 +36,15 @@ public:
   PostProcessing(const json & post_processing_config, const json & pre_processing_config);
 
   /**
-   * @brief Runs the entire post-processing pipeline.
-   * @param initial_boxes Raw bounding boxes from the network.
-   * @param initial_scores Raw scores from the network.
-   * @param initial_class_ids Raw class IDs from the network.
+   * @brief Runs the entire post-processing pipeline on the provided data.
+   * @param data The DetectionData struct containing initial boxes, scores, class_ids,
+   *             and initialized kept_indices. This struct will be modified in place.
    * @param original_image_size The dimensions (WxH) of the original input image before any preprocessing.
-   * @return DetectionData struct containing the final processed boxes (mapped to original image coordinates),
-   *         scores, class IDs, and the indices kept after NMS.
    */
-  DetectionData run(
-    const std::vector<cv::Rect2d> & initial_boxes, const std::vector<float> & initial_scores,
-    const std::vector<int> & initial_class_ids, const cv::Size & original_image_size);
+  void run( // Changed return type to void
+    DetectionData& data, // Pass by non-const reference
+    const cv::Size& original_image_size
+  );
 
 private:
   /** Vector of post-processing steps to be applied in sequence */
