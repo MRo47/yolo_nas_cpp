@@ -121,10 +121,9 @@ void NonMaximumSuppression::apply(
   // Filter out boxes below confidence threshold first - required by NMSBoxes behavior
   std::vector<cv::Rect2d> candidate_boxes;
   std::vector<float> candidate_scores;
-  std::vector<int> candidate_original_indices;  // Keep track of original index
+  std::vector<int> candidate_original_indices;
 
-  for (int original_idx :
-       data.kept_indices) {  // Operate on indices kept by previous steps (if any)
+  for (int original_idx : data.kept_indices) {
     if (data.scores[original_idx] >= conf_threshold_) {
       candidate_boxes.push_back(data.boxes[original_idx]);
       candidate_scores.push_back(data.scores[original_idx]);
@@ -137,8 +136,7 @@ void NonMaximumSuppression::apply(
     return;
   }
 
-  // Perform NMS using OpenCV
-  std::vector<int> nms_result_indices;  // Indices into the candidate_xxx vectors
+  std::vector<int> nms_result_indices;
   cv::dnn::NMSBoxes(
     candidate_boxes, candidate_scores, conf_threshold_, iou_threshold_, nms_result_indices);
 
@@ -155,7 +153,6 @@ void NonMaximumSuppression::apply(
 
 std::string NonMaximumSuppression::name() const { return "NonMaximumSuppression"; }
 
-// --- UndoRescaleBoxes Implementation ---
 UndoRescaleBoxes::UndoRescaleBoxes(const cv::Size & processed_size)
 : processed_size_(processed_size)
 {
@@ -200,7 +197,6 @@ void UndoRescaleBoxes::apply(DetectionData & data, const cv::Size & original_ima
 
 std::string UndoRescaleBoxes::name() const { return "UndoRescaleBoxes"; }
 
-// --- UndoPaddingBoxes Implementation ---
 UndoPaddingBoxes::UndoPaddingBoxes(const cv::Size & padded_size, PaddingType padding_type)
 : padded_size_(padded_size), padding_type_(padding_type)
 {
@@ -221,16 +217,14 @@ void UndoPaddingBoxes::apply(DetectionData & data, const cv::Size & original_ima
     padded_size_.width < original_image_size.width ||
     padded_size_.height < original_image_size.height) {
     // This might be valid if original image was larger and scaling shrunk it before padding
-    // Let's allow it but be mindful. A warning could be added.
-    // std::cerr << "Warning: Padded size is smaller than original size in UndoPaddingBoxes." << std::endl;
+    std::cerr << "Warning: Padded size is smaller than original size in UndoPaddingBoxes."
+              << std::endl;
   }
 
   if (padding_type_ == PaddingType::CENTER) {
     // Calculate padding added
     double pad_width = padded_size_.width - original_image_size.width;
     double pad_height = padded_size_.height - original_image_size.height;
-
-    // Calculate padding on top and left (integer division intended)
     double pad_left = pad_width / 2.0;
     double pad_top = pad_height / 2.0;
 
@@ -240,7 +234,7 @@ void UndoPaddingBoxes::apply(DetectionData & data, const cv::Size & original_ima
       box.x -= pad_left;
       box.y -= pad_top;
 
-      // Optional: Clamp coordinates after shifting (important here!)
+      // Optional: Clamp coordinates after shifting
       box.x = std::max(0.0, box.x);
       box.y = std::max(0.0, box.y);
       box.width = std::min(static_cast<double>(original_image_size.width) - box.x, box.width);
