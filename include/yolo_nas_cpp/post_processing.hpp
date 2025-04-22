@@ -41,17 +41,11 @@ public:
    *             and initialized kept_indices. This struct will be modified in place.
    * @param original_image_size The dimensions (WxH) of the original input image before any preprocessing.
    */
-  void run( // Changed return type to void
-    DetectionData& data, // Pass by non-const reference
-    const cv::Size& original_image_size
-  );
+  void run(DetectionData & data, const cv::Size & original_image_size);
 
 private:
-  /** Vector of post-processing steps to be applied in sequence */
   std::vector<std::unique_ptr<PostProcessingStep>> post_processing_steps_;
 };
-
-// --- PostProcessingStep Base Class ---
 
 /**
  * @class PostProcessingStep
@@ -78,8 +72,6 @@ public:
    */
   virtual std::string name() const = 0;
 };
-
-// --- Concrete PostProcessingStep Implementations ---
 
 /**
  * @class NonMaximumSuppression
