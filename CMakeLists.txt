@@ -5,13 +5,14 @@ project(yolo_nas_cpp VERSION 0.1 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Find OpenCV (require at least core and imgproc, adjust if needed)
+# Find OpenCV 
 find_package(OpenCV REQUIRED core imgproc highgui imgcodecs dnn)
 
 # Define the library
 add_library(yolo_nas_cpp
     src/pre_processing.cpp
     src/post_processing.cpp
+    src/network.cpp
 )
 
 # Include directories for consumers
