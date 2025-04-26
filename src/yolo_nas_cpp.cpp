@@ -3,8 +3,7 @@
 #include <opencv2/opencv.hpp>
 #include <string>
 
-#include "yolo_nas_cpp/post_processing.hpp"
-#include "yolo_nas_cpp/pre_processing.hpp"
+#include "yolo_nas_cpp/network.hpp"
 
 int main(int argc, char ** argv)
 {
@@ -20,20 +19,9 @@ int main(int argc, char ** argv)
   nlohmann::json config;
   file >> config;
 
-  yolo_nas_cpp::PreProcessing pre_processing(config["pre_processing"]);
-  cv::Mat image = cv::imread(image_path);
-  cv::Mat preprocessed_image;
-  pre_processing.run(image, preprocessed_image);
+  yolo_nas_cpp::DetectionNetwork network(config, model_path, false);
 
-  std::cout << "Preprocessed Image dims"
-            << "\nrows:" << preprocessed_image.rows << "\ncols:" << preprocessed_image.cols
-            << "\nchannels:" << preprocessed_image.channels() << std::endl;
-
-  yolo_nas_cpp::PostProcessing post_process(config["post_processing"], config["pre_processing"]);
-
-  cv::namedWindow("Preprocessed Image", cv::WINDOW_NORMAL);
-  cv::imshow("Preprocessed Image", preprocessed_image);
-  cv::waitKey(0);
-
+  yolo_nas_cpp::DetectionData detections = network.detect(cv::imread(image_path));
+  std::cout << "Num detections: " << detections.kept_indices.size() << std::endl;
   return 0;
 }
