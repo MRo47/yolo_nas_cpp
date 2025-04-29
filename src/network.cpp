@@ -15,11 +15,12 @@ namespace yolo_nas_cpp
 {
 
 DetectionNetwork::DetectionNetwork(
-  const json & config, const std::string & onnx_model_path, bool use_cuda)
+  const json & config, const std::string & onnx_model_path, const cv::Size & input_image_shape,
+  bool use_cuda)
 {
   std::cout << "Initializing Detection Network..." << std::endl;
   try {
-    parse_config(config);
+    parse_config(config, input_image_shape);
     std::cout << "Configuration parsed and pipelines initialized." << std::endl;
   } catch (const std::exception & e) {
     throw std::runtime_error("Failed to parse network configuration: " + std::string(e.what()));
@@ -66,7 +67,7 @@ DetectionNetwork::DetectionNetwork(
   std::cout << "Detection Network initialized." << std::endl;
 }
 
-void DetectionNetwork::parse_config(const json & config)
+void DetectionNetwork::parse_config(const json & config, const cv::Size & input_image_shape)
 {
   try {
     network_type_ = config.at("type").get<std::string>();
@@ -84,11 +85,14 @@ void DetectionNetwork::parse_config(const json & config)
     network_input_size_ = cv::Size(input_width, input_height);
 
     const auto & pre_processing_config = config.at("pre_processing");
-    pre_processing_pipeline_ = std::make_unique<PreProcessing>(pre_processing_config);
+    pre_processing_pipeline_ =
+      std::make_unique<PreProcessing>(pre_processing_config, input_image_shape);
+
+    auto pre_processing_metadata = pre_processing_pipeline_->get_metadata();
 
     const auto & post_processing_config = config.at("post_processing");
     post_processing_pipeline_ =
-      std::make_unique<PostProcessing>(post_processing_config, pre_processing_config);
+      std::make_unique<PostProcessing>(post_processing_config, pre_processing_metadata);
 
   } catch (const json::exception & e) {
     throw std::runtime_error("JSON parsing error in network config: " + std::string(e.what()));

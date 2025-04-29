@@ -28,10 +28,13 @@ public:
    * @brief Constructs the DetectionNetwork.
    * @param config JSON object containing the full network configuration.
    * @param onnx_model_path Path to the ONNX model file.
+   * @param input_image_shape Expected input image size (HxW).
    * @param use_cuda If true, attempt to configure OpenCV DNN to use CUDA backend and target.
    * @throws std::runtime_error if configuration parsing fails or the model cannot be loaded.
    */
-  DetectionNetwork(const json & config, const std::string & onnx_model_path, bool use_cuda);
+  DetectionNetwork(
+    const json & config, const std::string & onnx_model_path, const cv::Size & input_image_shape,
+    bool use_cuda);
 
   /**
    * @brief Runs the full detection pipeline on a single input image.
@@ -57,8 +60,9 @@ private:
   /**
    * @brief Parses the configuration JSON and initializes pipelines and members.
    * @param config The JSON configuration object.
+   * @param input_image_shape Expected input image size (HxW).
    */
-  void parse_config(const json & config);
+  void parse_config(const json & config, const cv::Size & input_image_shape);
 
   /**
    * @brief Parses the raw network output tensors into boxes, scores, and class IDs.
@@ -79,6 +83,7 @@ private:
 
   std::string network_type_;
   cv::Size network_input_size_;
+  cv::Size image_input_shape_;
   std::vector<std::string> class_labels_;
   std::vector<std::string> output_layer_names_;
 };
