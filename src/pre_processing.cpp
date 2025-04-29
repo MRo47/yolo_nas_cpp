@@ -10,35 +10,51 @@
 namespace yolo_nas_cpp
 {
 
-std::unique_ptr<PreProcessingStep> PreProcessingStep::create_from_json(
-  const std::string & step_name, const json & params)
+std::pair<std::unique_ptr<PreProcessingStep>, PreProcessingMetadata>
+PreProcessingStep::create_from_json(
+  const std::string & step_name, const json & params, const cv::Size & input_shape)
 {
+  std::unique_ptr<PreProcessingStep> step_ptr;
+  cv::Size output_shape = {-1, -1};
+
+  // Create the specific step (constructors now may need input_shape)
   if (step_name == "StandardizeImage") {
-    return std::make_unique<StandardizeImage>(params);
+    step_ptr = std::make_unique<StandardizeImage>(params);
+    output_shape = step_ptr->calculate_output_shape(input_shape);
   } else if (step_name == "NormalizeImage") {
-    return std::make_unique<NormalizeImage>(params);
+    step_ptr = std::make_unique<NormalizeImage>(params);
+    output_shape = step_ptr->calculate_output_shape(input_shape);
   } else if (step_name == "DetectionCenterPadding") {
-    return std::make_unique<DetectionCenterPadding>(params);
+    step_ptr = std::make_unique<DetectionCenterPadding>(params);
+    output_shape = step_ptr->calculate_output_shape(input_shape);
   } else if (step_name == "DetectionBottomRightPadding") {
-    return std::make_unique<DetectionBottomRightPadding>(params);
+    step_ptr = std::make_unique<DetectionBottomRightPadding>(params);
+    output_shape = step_ptr->calculate_output_shape(input_shape);
   } else if (step_name == "ImagePermute") {
-    // this is handled as HWC -> CHW in the network before inference, see opencv cv::dnn::blobFromImage()
-    return std::make_unique<PassthroughStep>(params);
+    step_ptr = std::make_unique<PassthroughStep>(params);
+    output_shape = step_ptr->calculate_output_shape(input_shape);
   } else if (step_name == "DetectionLongestMaxSizeRescale") {
-    return std::make_unique<DetectionLongestMaxSizeRescale>(params);
+    step_ptr = std::make_unique<DetectionLongestMaxSizeRescale>(params);
+    output_shape = step_ptr->calculate_output_shape(input_shape);
   } else if (step_name == "DetectionRescale") {
-    return std::make_unique<DetectionRescale>(params);
+    step_ptr = std::make_unique<DetectionRescale>(params);
+    output_shape = step_ptr->calculate_output_shape(input_shape);
   } else {
     throw std::runtime_error("Unknown pre-processing step type requested: " + step_name);
   }
+
+  PreProcessingMetadata metadata(step_name, input_shape, output_shape, params);
+
+  return {std::move(step_ptr), std::move(metadata)};
 }
 
-// PreProcessing implementation
-PreProcessing::PreProcessing(const json & config)
+PreProcessing::PreProcessing(const json & config, const cv::Size input_shape)
 {
   if (!config.is_array()) {
     throw std::runtime_error("Expected 'pre_processing' config to be a JSON array.");
   }
+
+  cv::Size current_shape = input_shape;
 
   for (const auto & step_config : config) {
     if (!step_config.is_object() || step_config.size() != 1) {
@@ -51,16 +67,27 @@ PreProcessing::PreProcessing(const json & config)
     const json & params = it.value();
 
     try {
-      processing_steps_.emplace_back(
-        PreProcessingStep::create_from_json(
-          step_name, params));  // Move the created step into the vector
-      std::cout << "Successfully added preprocessing step: " << step_name << std::endl;
+      // Create step and get metadata, passing the input shape from the previous step
+      auto [step_ptr, metadata] =
+        PreProcessingStep::create_from_json(step_name, params, current_shape);
+
+      processing_steps_.push_back(std::move(step_ptr));
+      metadata_.push_back(std::move(metadata));
+
+      current_shape = metadata_.back().output_shape;
+
+      std::cout << "Successfully added preprocessing step: " << step_name
+                << " (Input: " << metadata_.back().input_shape.width << "x"
+                << metadata_.back().input_shape.height
+                << ", Output: " << metadata_.back().output_shape.width << "x"
+                << metadata_.back().output_shape.height << ")" << std::endl;
 
     } catch (const std::exception & e) {
       throw std::runtime_error(
         "Error configuring pre-processing step '" + step_name + "': " + e.what());
     }
   }
+
   if (processing_steps_.empty()) {
     std::cerr << "Warning: Pre-processing configuration was empty or resulted in no steps."
               << std::endl;
@@ -89,6 +116,8 @@ void PreProcessing::run(const cv::Mat & input, cv::Mat & output)
   output = temp_output;
 }
 
+const std::vector<PreProcessingMetadata> & PreProcessing::get_metadata() const { return metadata_; }
+
 StandardizeImage::StandardizeImage(const json & params)
 {
   try {
@@ -112,6 +141,11 @@ void StandardizeImage::apply(const cv::Mat & input, cv::Mat & output) const
 
 std::string StandardizeImage::name() const { return "StandardizeImage"; }
 
+cv::Size StandardizeImage::calculate_output_shape(const cv::Size & input_shape) const
+{
+  return input_shape;
+}
+
 NormalizeImage::NormalizeImage(const json & params)
 {
   try {
@@ -122,7 +156,6 @@ NormalizeImage::NormalizeImage(const json & params)
       throw std::runtime_error(
         "NormalizeImage requires 'mean' and 'std' to be arrays of exactly 3 numbers.");
     }
-    // Basic check for non-zero std dev
     for (double val : std_) {
       if (std::abs(val) < 1e-9) {
         throw std::invalid_argument("Standard deviation values must be non-zero.");
@@ -148,12 +181,18 @@ void NormalizeImage::apply(const cv::Mat & input, cv::Mat & output) const
   } else {
     input_float = input;
   }
-
-  output = (input_float - cv::Scalar(mean_[0], mean_[1], mean_[2])) /
-           cv::Scalar(std_[0], std_[1], std_[2]);
+  cv::Mat meanMat = cv::Mat(1, 1, CV_32FC3, cv::Scalar(mean_[0], mean_[1], mean_[2]));
+  cv::Mat stdMat = cv::Mat(1, 1, CV_32FC3, cv::Scalar(std_[0], std_[1], std_[2]));
+  cv::subtract(input_float, meanMat, output);  // output = input_float - mean
+  cv::divide(output, stdMat, output);          // output = output / std
 }
 
 std::string NormalizeImage::name() const { return "NormalizeImage"; }
+
+cv::Size NormalizeImage::calculate_output_shape(const cv::Size & input_shape) const
+{
+  return input_shape;
+}
 
 DetectionCenterPadding::DetectionCenterPadding(const json & params)
 {
@@ -177,14 +216,16 @@ DetectionCenterPadding::DetectionCenterPadding(const json & params)
 void DetectionCenterPadding::apply(const cv::Mat & input, cv::Mat & output) const
 {
   if (input.rows > out_shape_.height || input.cols > out_shape_.width) {
-    throw std::runtime_error(
-      "DetectionCenterPadding::apply: Input image dimensions (" + std::to_string(input.cols) + "x" +
-      std::to_string(input.rows) + ") exceed target output_shape (" +
-      std::to_string(out_shape_.width) + "x" + std::to_string(out_shape_.height) + ").");
+    std::cerr << "Warning: DetectionCenterPadding input (" << input.cols << "x" << input.rows
+              << ") is larger than target (" << out_shape_.width << "x" << out_shape_.height
+              << "). Output will be cropped/incorrectly padded." << std::endl;
   }
 
   int pad_height = out_shape_.height - input.rows;
   int pad_width = out_shape_.width - input.cols;
+
+  pad_height = std::max(0, pad_height);
+  pad_width = std::max(0, pad_width);
 
   int pad_top = pad_height / 2;
   int pad_bottom = pad_height - pad_top;
@@ -198,7 +239,11 @@ void DetectionCenterPadding::apply(const cv::Mat & input, cv::Mat & output) cons
 
 std::string DetectionCenterPadding::name() const { return "DetectionCenterPadding"; }
 
-// DetectionBottomRightPadding implementation
+cv::Size DetectionCenterPadding::calculate_output_shape(const cv::Size & /*input_shape*/) const
+{
+  return out_shape_;
+}
+
 DetectionBottomRightPadding::DetectionBottomRightPadding(const json & params)
 {
   try {
@@ -221,19 +266,28 @@ DetectionBottomRightPadding::DetectionBottomRightPadding(const json & params)
 void DetectionBottomRightPadding::apply(const cv::Mat & input, cv::Mat & output) const
 {
   if (input.rows > out_shape_.height || input.cols > out_shape_.width) {
-    throw std::runtime_error(
-      "DetectionBottomRightPadding::apply: Input image dimensions (" + std::to_string(input.cols) +
-      "x" + std::to_string(input.rows) + ") exceed target output_shape (" +
-      std::to_string(out_shape_.width) + "x" + std::to_string(out_shape_.height) + ").");
+    std::cerr << "Warning: DetectionBottomRightPadding input (" << input.cols << "x" << input.rows
+              << ") is larger than target (" << out_shape_.width << "x" << out_shape_.height
+              << "). Output will be cropped/incorrectly padded." << std::endl;
   }
+
   int pad_height = out_shape_.height - input.rows;
   int pad_width = out_shape_.width - input.cols;
+
+  // Ensure padding is not negative
+  pad_height = std::max(0, pad_height);
+  pad_width = std::max(0, pad_width);
 
   cv::copyMakeBorder(
     input, output, 0, pad_height, 0, pad_width, cv::BORDER_CONSTANT, cv::Scalar::all(pad_value_));
 }
 
 std::string DetectionBottomRightPadding::name() const { return "DetectionBottomRightPadding"; }
+
+cv::Size DetectionBottomRightPadding::calculate_output_shape(const cv::Size & /*input_shape*/) const
+{
+  return out_shape_;
+}
 
 PassthroughStep::PassthroughStep(const json & /*params*/)
 {
@@ -247,6 +301,11 @@ void PassthroughStep::apply(const cv::Mat & input, cv::Mat & output) const
 }
 
 std::string PassthroughStep::name() const { return "PassthroughStep"; }
+
+cv::Size PassthroughStep::calculate_output_shape(const cv::Size & input_shape) const
+{
+  return input_shape;
+}
 
 DetectionLongestMaxSizeRescale::DetectionLongestMaxSizeRescale(const json & params)
 {
@@ -271,32 +330,20 @@ void DetectionLongestMaxSizeRescale::apply(const cv::Mat & input, cv::Mat & outp
     throw std::runtime_error(
       "DetectionLongestMaxSizeRescale::apply received an empty input image.");
   }
-  float scale_factor = 1.0f;
-  // Calculate scale factor based on limiting dimension
-  if (input.rows > 0 && input.cols > 0) {
-    scale_factor = std::min(
-      static_cast<float>(out_shape_.height) / input.rows,
-      static_cast<float>(out_shape_.width) / input.cols);
-  } else {
-    // Handle zero dimension case if necessary, maybe default to no resize?
-    input.copyTo(output);
+
+  auto output_shape = calculate_output_shape(input.size());
+
+  if (output_shape.width <= 0 || output_shape.height <= 0) {
+    throw std::runtime_error(
+      "DetectionLongestMaxSizeRescale::apply could not determine output shape.");
+  }
+
+  if (input.size() != output_shape) {
+    cv::resize(input, output, output_shape, 0, 0, cv::INTER_LINEAR);
     return;
   }
 
-  // Only resize if the scale factor is meaningfully different from 1
-  if (std::abs(scale_factor - 1.0f) > 1e-6) {
-    // Calculate new dimensions, rounding to nearest integer
-    int new_height = static_cast<int>(std::round(input.rows * scale_factor));
-    int new_width = static_cast<int>(std::round(input.cols * scale_factor));
-
-    // Ensure dimensions are at least 1x1 if scale_factor is very small
-    new_height = std::max(1, new_height);
-    new_width = std::max(1, new_width);
-
-    cv::resize(input, output, cv::Size(new_width, new_height), 0, 0, cv::INTER_LINEAR);
-  } else {
-    input.copyTo(output);
-  }
+  input.copyTo(output);
 }
 
 std::string DetectionLongestMaxSizeRescale::name() const
@@ -304,11 +351,31 @@ std::string DetectionLongestMaxSizeRescale::name() const
   return "DetectionLongestMaxSizeRescale";
 }
 
-// DetectionRescale implementation
+// Calculate the exact output shape if input shape is known, otherwise return unknown
+cv::Size DetectionLongestMaxSizeRescale::calculate_output_shape(const cv::Size & input_shape) const
+{
+  if (input_shape.width <= 0 || input_shape.height <= 0) {
+    return {-1, -1};
+  }
+
+  float scale_factor = std::min(
+    static_cast<float>(out_shape_.height) / static_cast<float>(input_shape.height),
+    static_cast<float>(out_shape_.width) / static_cast<float>(input_shape.width));
+
+  if (std::abs(scale_factor - 1.0f) > 1e-6) {
+    int new_height = static_cast<int>(std::round(input_shape.height * scale_factor));
+    int new_width = static_cast<int>(std::round(input_shape.width * scale_factor));
+
+    return {new_width, new_height};
+  }
+
+  return input_shape;
+}
+
 DetectionRescale::DetectionRescale(const json & params)
 {
   try {
-    out_shape_ = parse_cv_size(params.at("output_shape"));  // Use helper
+    out_shape_ = parse_cv_size(params.at("output_shape"));
 
     if (out_shape_.width <= 0 || out_shape_.height <= 0) {
       throw std::invalid_argument("output_shape dimensions must be positive.");
@@ -327,9 +394,15 @@ void DetectionRescale::apply(const cv::Mat & input, cv::Mat & output) const
   if (input.empty()) {
     throw std::runtime_error("DetectionRescale::apply received an empty input image.");
   }
+  // Resize directly to the target shape, ignoring aspect ratio
   cv::resize(input, output, out_shape_, 0, 0, cv::INTER_LINEAR);
 }
 
 std::string DetectionRescale::name() const { return "DetectionRescale"; }
+
+cv::Size DetectionRescale::calculate_output_shape(const cv::Size & /*input_shape*/) const
+{
+  return out_shape_;
+}
 
 }  // namespace yolo_nas_cpp

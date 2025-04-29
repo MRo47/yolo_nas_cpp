@@ -11,6 +11,19 @@ namespace yolo_nas_cpp
 
 using json = nlohmann::json;
 
+struct PreProcessingMetadata
+{
+  std::string step_name;
+  cv::Size input_shape = {-1, -1};
+  cv::Size output_shape = {-1, -1};
+  json params;
+
+  PreProcessingMetadata(std::string name, cv::Size in_shape, cv::Size out_shape, json p)
+  : step_name(std::move(name)), input_shape(in_shape), output_shape(out_shape), params(std::move(p))
+  {
+  }
+};
+
 // Forward declaration
 class PreProcessingStep;
 
@@ -29,9 +42,10 @@ public:
    * @param config JSON array containing processing step configurations.
    *               Each element should be an object with a single key (the step name)
    *               and a value containing the parameters for that step.
+   * @param input_shape The input shape of the image, used to calculate the output shape of some steps
    * @throws std::runtime_error if the configuration is invalid or a step fails creation/parsing.
    */
-  explicit PreProcessing(const json & config);
+  explicit PreProcessing(const json & config, const cv::Size input_shape = {-1, -1});
 
   /**
    * @brief Run the preprocessing pipeline on an input image
@@ -40,9 +54,17 @@ public:
    */
   void run(const cv::Mat & input, cv::Mat & output);
 
+  /**
+   * @brief Get the collected metadata for each preprocessing step.
+   * @return A constant reference to the vector of metadata objects.
+   */
+  const std::vector<PreProcessingMetadata> & get_metadata() const;
+
 private:
   /** Vector of preprocessing steps to be applied in sequence */
   std::vector<std::unique_ptr<PreProcessingStep>> processing_steps_;
+  /** Metadata collected for each preprocessing step during configuration */
+  std::vector<PreProcessingMetadata> metadata_;
 };
 
 /**
@@ -71,15 +93,25 @@ public:
   virtual std::string name() const = 0;
 
   /**
+   * @brief Calculate the output shape produced by this step, given an input shape.
+   * @param input_shape The shape of the image entering this step.
+   * @return The shape of the image after this step is applied.
+   *         Returns {-1, -1} if the output shape cannot be determined without the actual image
+   *         (e.g., for aspect-ratio-preserving resize with unknown input).
+   */
+  virtual cv::Size calculate_output_shape(const cv::Size & input_shape) const = 0;
+
+  /**
    * @brief Factory method to create preprocessing steps from JSON config
    * @param step_name Name of the step (e.g., "StandardizeImage")
    * @param params JSON parameters for the step
-   * @return A unique pointer to the created step
+   * @param input_shape Size of the input image
+   * @return A pair containing the created step and its metadata
    * @throws std::runtime_error if the step_name is unknown or parameters are invalid
    *                            (via the specific step's constructor).
    */
-  static std::unique_ptr<PreProcessingStep> create_from_json(
-    const std::string & step_name, const json & params);
+  static std::pair<std::unique_ptr<PreProcessingStep>, PreProcessingMetadata> create_from_json(
+    const std::string & step_name, const json & params, const cv::Size & input_shape);
 };
 
 /**
@@ -92,6 +124,7 @@ public:
   explicit StandardizeImage(const json & params);
   void apply(const cv::Mat & input, cv::Mat & output) const override;
   std::string name() const override;
+  cv::Size calculate_output_shape(const cv::Size & input_shape) const override;
 
 private:
   double max_value_;
@@ -107,6 +140,7 @@ public:
   explicit NormalizeImage(const json & params);
   void apply(const cv::Mat & input, cv::Mat & output) const override;
   std::string name() const override;
+  cv::Size calculate_output_shape(const cv::Size & input_shape) const override;
 
 private:
   std::vector<double> mean_;
@@ -123,6 +157,7 @@ public:
   explicit DetectionCenterPadding(const json & params);
   void apply(const cv::Mat & input, cv::Mat & output) const override;
   std::string name() const override;
+  cv::Size calculate_output_shape(const cv::Size & input_shape) const override;
 
 private:
   int pad_value_;
@@ -139,6 +174,7 @@ public:
   explicit DetectionBottomRightPadding(const json & params);
   void apply(const cv::Mat & input, cv::Mat & output) const override;
   std::string name() const override;
+  cv::Size calculate_output_shape(const cv::Size & input_shape) const override;
 
 private:
   int pad_value_;
@@ -153,24 +189,10 @@ private:
 class PassthroughStep : public PreProcessingStep
 {
 public:
-  /**
-   * @brief Constructor. Ignores any provided parameters.
-   * @param params JSON parameters (ignored).
-   */
-  explicit PassthroughStep(const json & /*params*/);  // Mark params as unused
-
-  /**
-   * @brief Apply the passthrough step. Makes output refer to the same data as input.
-   * @param input Input image.
-   * @param output Output image (will share data with input).
-   */
+  explicit PassthroughStep(const json & /*params*/);
   void apply(const cv::Mat & input, cv::Mat & output) const override;
-
-  /**
-   * @brief Get the name of the processing step.
-   * @return Step name ("PassthroughStep").
-   */
   std::string name() const override;
+  cv::Size calculate_output_shape(const cv::Size & input_shape) const override;
 };
 
 /**
@@ -183,9 +205,10 @@ public:
   explicit DetectionLongestMaxSizeRescale(const json & params);
   void apply(const cv::Mat & input, cv::Mat & output) const override;
   std::string name() const override;
+  cv::Size calculate_output_shape(const cv::Size & input_shape) const override;
 
 private:
-  cv::Size out_shape_;  // Note: cv::Size is (width, height)
+  cv::Size out_shape_;
 };
 
 /**
@@ -198,9 +221,10 @@ public:
   explicit DetectionRescale(const json & params);
   void apply(const cv::Mat & input, cv::Mat & output) const override;
   std::string name() const override;
+  cv::Size calculate_output_shape(const cv::Size & input_shape) const override;
 
 private:
-  cv::Size out_shape_;  // Note: cv::Size is (width, height)
+  cv::Size out_shape_;
 };
 
 }  // namespace yolo_nas_cpp
