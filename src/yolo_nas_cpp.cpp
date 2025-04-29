@@ -19,9 +19,11 @@ int main(int argc, char ** argv)
   nlohmann::json config;
   file >> config;
 
-  yolo_nas_cpp::DetectionNetwork network(config, model_path, false);
+  cv::Mat image = cv::imread(image_path);
 
-  yolo_nas_cpp::DetectionData detections = network.detect(cv::imread(image_path));
+  yolo_nas_cpp::DetectionNetwork network(config, model_path, image.size(), false);
+
+  yolo_nas_cpp::DetectionData detections = network.detect(image);
   std::cout << "Num detections: " << detections.kept_indices.size() << std::endl;
   return 0;
 }
