@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "yolo_nas_cpp/detection_data.hpp"
+#include "yolo_nas_cpp/pre_processing.hpp"
 
 namespace yolo_nas_cpp
 {
@@ -29,11 +30,12 @@ public:
   /**
    * @brief Constructs the post-processing pipeline.
    * @param post_processing_config JSON object for post-processing specific steps (e.g., NMS).
-   * @param pre_processing_config JSON array detailing the preprocessing steps applied earlier,
-   *                              used to construct inverse transformation steps.
+   * @param pre_processing_metadata Vector of metadata objects for each preprocessing step.
    * @throws std::runtime_error if configuration parsing fails.
    */
-  PostProcessing(const json & post_processing_config, const json & pre_processing_config);
+  PostProcessing(
+    const json & post_processing_config,
+    const std::vector<PreProcessingMetadata> & pre_processing_metadata);
 
   /**
    * @brief Runs the entire post-processing pipeline on the provided data.
@@ -62,9 +64,8 @@ public:
   /**
    * @brief Apply the post-processing step. Modifies the DetectionData in place.
    * @param data The detection data (boxes, scores, indices) to be processed. Modified by the function.
-   * @param original_image_size The dimensions (WxH) of the original input image. Needed for inverse transforms.
    */
-  virtual void apply(DetectionData & data, const cv::Size & original_image_size) const = 0;
+  virtual void apply(DetectionData & data) const = 0;
 
   /**
    * @brief Get the name of the processing step.
@@ -90,7 +91,7 @@ public:
    */
   NonMaximumSuppression(float conf_threshold, float iou_threshold);
 
-  void apply(DetectionData & data, const cv::Size & original_image_size) const override;
+  void apply(DetectionData & data) const override;
   std::string name() const override;
 
 private:
@@ -113,21 +114,23 @@ public:
    * @param processed_size The size (WxH) the image was rescaled TO during preprocessing
    *                       (i.e., the input size for the padding step, if any, or the network input size).
    */
-  explicit UndoRescaleBoxes(const cv::Size & processed_size);
+  explicit UndoRescaleBoxes(
+    const cv::Size & rescaled_image_size, const cv::Size & pre_scaling_image_size);
 
-  void apply(DetectionData & data, const cv::Size & original_image_size) const override;
+  void apply(DetectionData & data) const override;
   std::string name() const override;
 
 private:
-  cv::Size processed_size_;  // Size AFTER rescaling in preprocessing
+  double scale_x_;
+  double scale_y_;
+  const cv::Size pre_scaling_image_size_;
 };
 
 /**
  * @class UndoPaddingBoxes
- * @brief Adjusts bounding box coordinates to account for padding removal.
+ * @brief Adjusts bounding box coordinates to reverse the effect of a padding operation.
  *
- * This step reverses the effect of a preprocessing padding step
- * (like DetectionCenterPadding). Assumes coordinates are relative to the padded image.
+ * Maps coordinates from the padded image space back to the space before padding was applied.
  */
 class UndoPaddingBoxes : public PostProcessingStep
 {
@@ -135,22 +138,25 @@ public:
   enum class PaddingType
   {
     CENTER,
-    BOTTOM_RIGHT,
-    UNKNOWN
+    BOTTOM_RIGHT
   };
 
   /**
    * @brief Constructor.
    * @param padded_size The size (WxH) the image was padded TO during preprocessing.
+   * @param pre_padding_size The size (WxH) the image had immediately BEFORE padding was applied.
    * @param padding_type The type of padding applied (Center or BottomRight).
    */
-  UndoPaddingBoxes(const cv::Size & padded_size, PaddingType padding_type);
+  UndoPaddingBoxes(
+    const cv::Size & padded_size, const cv::Size & pre_padding_size, PaddingType padding_type);
 
-  void apply(DetectionData & data, const cv::Size & original_image_size) const override;
+  // Apply method now uses pre_padding_size_ for calculations
+  void apply(DetectionData & data) const override;
   std::string name() const override;
 
 private:
-  cv::Size padded_size_;  // Size AFTER padding in preprocessing
+  cv::Size padded_size_;
+  cv::Size pre_padding_size_;
   PaddingType padding_type_;
 };
 

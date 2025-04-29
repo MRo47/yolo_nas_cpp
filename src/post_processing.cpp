@@ -12,17 +12,13 @@
 namespace yolo_nas_cpp
 {
 
-// Helper to get cv::Size from JSON (assuming defined elsewhere, e.g., preprocessing.cpp)
-// If not, define it here.
-extern cv::Size parse_cv_size(const json & shape_arr, const std::string & param_name);
-
-// --- PostProcessing Constructor ---
 PostProcessing::PostProcessing(
-  const json & post_processing_config, const json & pre_processing_config)
+  const json & post_processing_config,
+  const std::vector<PreProcessingMetadata> & pre_processing_metadata)
 {
   std::cout << "Initializing PostProcessing pipeline..." << std::endl;
 
-  // --- 1. Add NMS Step ---
+  // 1. Add NMS Step
   try {
     const auto & nms_conf = post_processing_config.at("NMS");
     float conf_threshold = nms_conf.at("conf").get<float>();
@@ -35,64 +31,62 @@ PostProcessing::PostProcessing(
     throw std::runtime_error("Failed to parse NMS configuration: " + std::string(e.what()));
   }
 
-  // --- 2. Add Inverse Preprocessing Steps (in reverse order) ---
-  if (!pre_processing_config.is_array()) {
-    throw std::runtime_error("Pre-processing config passed to PostProcessing must be an array.");
-  }
+  // 2. Add Inverse Preprocessing Steps (in reverse order with size tracking)
+  std::cout << "  Adding inverse geometric transformations..." << std::endl;
 
-  // Iterate through preprocessing steps in REVERSE order
-  for (auto it = pre_processing_config.rbegin(); it != pre_processing_config.rend(); ++it) {
-    const auto & step_config = *it;
+  // Iterate backwards through the preprocessing metadata
+  for (auto it = pre_processing_metadata.rbegin(); it != pre_processing_metadata.rend(); ++it) {
+    const auto & metadata = *it;
 
-    if (!step_config.is_object() || step_config.size() != 1) {
-      std::cerr
-        << "Warning: Skipping invalid entry in pre_processing config during post-processing setup."
-        << std::endl;
-      continue;
-    }
+    std::cout << "    Processing PreStep: " << metadata.step_name
+              << " (Input: " << metadata.input_shape << ", Output: " << metadata.output_shape << ")"
+              << std::endl;
 
-    const std::string & step_name = step_config.begin().key();
-    const json & params = step_config.begin().value();
-
+    // Determine which inverse step to add based on the pre-processing step name
     try {
-      if (step_name == "DetectionLongestMaxSizeRescale" || step_name == "DetectionRescale") {
-        // This step rescaled the image to a certain size.
-        cv::Size processed_size = parse_cv_size(params.at("output_shape"));
-        post_processing_steps_.push_back(std::make_unique<UndoRescaleBoxes>(processed_size));
-        std::cout << "  + Added inverse step: UndoRescaleBoxes (for " << step_name << ")"
-                  << std::endl;
+      if (
+        metadata.step_name == "DetectionLongestMaxSizeRescale" ||
+        metadata.step_name == "DetectionRescale") {
+        post_processing_steps_.emplace_back(
+          std::make_unique<UndoRescaleBoxes>(metadata.output_shape, metadata.input_shape));
+        std::cout << "    Added step: UndoRescaleBoxes (From " << metadata.output_shape << " to "
+                  << metadata.input_shape << ")" << std::endl;
 
-      } else if (step_name == "DetectionCenterPadding") {
-        // This step padded the image to a certain size using center padding.
-        cv::Size padded_size = parse_cv_size(params.at("output_shape"));
-        post_processing_steps_.push_back(
-          std::make_unique<UndoPaddingBoxes>(padded_size, UndoPaddingBoxes::PaddingType::CENTER));
-        std::cout << "  + Added inverse step: UndoPaddingBoxes (Center) (for " << step_name << ")"
-                  << std::endl;
-
-      } else if (step_name == "DetectionBottomRightPadding") {
-        // This step padded the image TO a certain size using bottom-right padding.
-        cv::Size padded_size = parse_cv_size(params.at("output_shape"));
-        post_processing_steps_.push_back(
+      } else if (metadata.step_name == "DetectionCenterPadding") {
+        post_processing_steps_.emplace_back(
           std::make_unique<UndoPaddingBoxes>(
-            padded_size, UndoPaddingBoxes::PaddingType::BOTTOM_RIGHT));
-        std::cout << "  + Added inverse step: UndoPaddingBoxes (BottomRight) (for " << step_name
-                  << ")" << std::endl;
-      }
-      // Add other inverse steps here if needed (e.g., undoing normalization if it affects coordinates somehow, though unlikely)
-      // Steps like StandardizeImage, ImagePermute, NormalizeImage usually don't require an inverse step for box coordinates.
+            metadata.output_shape, metadata.input_shape, UndoPaddingBoxes::PaddingType::CENTER));
+        std::cout << "    [OK] Added step: UndoPaddingBoxes (CENTER, From " << metadata.output_shape
+                  << " to " << metadata.input_shape << ")" << std::endl;
 
+      } else if (metadata.step_name == "DetectionBottomRightPadding") {
+        post_processing_steps_.emplace_back(
+          std::make_unique<UndoPaddingBoxes>(
+            metadata.output_shape, metadata.input_shape,
+            UndoPaddingBoxes::PaddingType::BOTTOM_RIGHT));
+        std::cout << "    [OK] Added step: UndoPaddingBoxes (BOTTOM_RIGHT, From "
+                  << metadata.output_shape << " to " << metadata.input_shape << ")" << std::endl;
+
+      } else {
+        std::cout << "    Skipping non-geometric step: " << metadata.step_name << std::endl;
+        // If shape tracking mismatched, warning was already printed.
+        if (metadata.output_shape != metadata.input_shape) {
+          std::cerr << "Warning: Non-geometric step '" << metadata.step_name
+                    << "' changed shape from " << metadata.input_shape << " to "
+                    << metadata.output_shape << ", but no inverse geometric step added."
+                    << std::endl;
+        }
+      }
     } catch (const std::exception & e) {
-      // Catch errors during parsing of preprocessing params for inverse steps
       throw std::runtime_error(
-        "Error creating inverse step for '" + step_name + "': " + std::string(e.what()));
+        "Failed to create inverse step for '" + metadata.step_name + "': " + e.what());
     }
   }
-  std::cout << "PostProcessing pipeline initialized with " << post_processing_steps_.size()
-            << " steps." << std::endl;
+  std::cout << "PostProcessing pipeline initialization complete. Total steps: "
+            << post_processing_steps_.size() << std::endl;
 }
 
-void PostProcessing::run(DetectionData & data, const cv::Size & original_image_size)
+void PostProcessing::run(DetectionData & data, const cv::Size & /*original_image_size*/)
 {
   if (data.boxes.size() != data.scores.size() || data.boxes.size() != data.class_ids.size()) {
     throw std::runtime_error(
@@ -100,7 +94,7 @@ void PostProcessing::run(DetectionData & data, const cv::Size & original_image_s
   }
 
   for (const auto & step : post_processing_steps_) {
-    step->apply(data, original_image_size);
+    step->apply(data);
   }
 }
 
@@ -115,8 +109,7 @@ NonMaximumSuppression::NonMaximumSuppression(float conf_threshold, float iou_thr
   }
 }
 
-void NonMaximumSuppression::apply(
-  DetectionData & data, const cv::Size & /*original_image_size*/) const
+void NonMaximumSuppression::apply(DetectionData & data) const
 {
   // Filter out boxes below confidence threshold first - required by NMSBoxes behavior
   std::vector<cv::Rect2d> candidate_boxes;
@@ -153,42 +146,35 @@ void NonMaximumSuppression::apply(
 
 std::string NonMaximumSuppression::name() const { return "NonMaximumSuppression"; }
 
-UndoRescaleBoxes::UndoRescaleBoxes(const cv::Size & processed_size)
-: processed_size_(processed_size)
+UndoRescaleBoxes::UndoRescaleBoxes(
+  const cv::Size & rescaled_image_size, const cv::Size & pre_scaling_image_size)
+: pre_scaling_image_size_(pre_scaling_image_size)
 {
-  if (processed_size_.width <= 0 || processed_size_.height <= 0) {
+  if (rescaled_image_size.width <= 0 || rescaled_image_size.height <= 0) {
     throw std::invalid_argument("UndoRescaleBoxes: Processed size dimensions must be positive.");
   }
+  if (pre_scaling_image_size.width <= 0 || pre_scaling_image_size.height <= 0) {
+    throw std::invalid_argument("UndoRescaleBoxes: Pre-scaling size dimensions must be positive.");
+  }
+  scale_x_ = static_cast<double>(pre_scaling_image_size.width) / rescaled_image_size.width;
+  scale_y_ = static_cast<double>(pre_scaling_image_size.height) / rescaled_image_size.height;
 }
 
-void UndoRescaleBoxes::apply(DetectionData & data, const cv::Size & original_image_size) const
+void UndoRescaleBoxes::apply(DetectionData & data) const
 {
-  if (original_image_size.width <= 0 || original_image_size.height <= 0) {
-    throw std::runtime_error("UndoRescaleBoxes::apply received invalid original_image_size.");
-  }
-  if (processed_size_.width <= 0 || processed_size_.height <= 0) {
-    throw std::runtime_error(
-      "UndoRescaleBoxes::apply has invalid internal processed_size.");  // Should be caught by constructor
-  }
-
-  // Calculate scaling factors
-  double scale_x = static_cast<double>(original_image_size.width) / processed_size_.width;
-  double scale_y = static_cast<double>(original_image_size.height) / processed_size_.height;
-
-  // Apply scaling to the boxes kept after NMS
   for (int idx : data.kept_indices) {
     cv::Rect2d & box = data.boxes[idx];
-    box.x *= scale_x;
-    box.y *= scale_y;
-    box.width *= scale_x;
-    box.height *= scale_y;
+    box.x *= scale_x_;
+    box.y *= scale_y_;
+    box.width *= scale_x_;
+    box.height *= scale_y_;
 
     // Optional: Clamp coordinates to original image boundaries
     box.x = std::max(0.0, box.x);
     box.y = std::max(0.0, box.y);
     // Ensure x+width and y+height don't exceed original dimensions
-    box.width = std::min(static_cast<double>(original_image_size.width) - box.x, box.width);
-    box.height = std::min(static_cast<double>(original_image_size.height) - box.y, box.height);
+    box.width = std::min(static_cast<double>(pre_scaling_image_size_.width) - box.x, box.width);
+    box.height = std::min(static_cast<double>(pre_scaling_image_size_.height) - box.y, box.height);
     // Ensure width/height are not negative if clamping pushes x/y too far
     box.width = std::max(0.0, box.width);
     box.height = std::max(0.0, box.height);
@@ -197,64 +183,55 @@ void UndoRescaleBoxes::apply(DetectionData & data, const cv::Size & original_ima
 
 std::string UndoRescaleBoxes::name() const { return "UndoRescaleBoxes"; }
 
-UndoPaddingBoxes::UndoPaddingBoxes(const cv::Size & padded_size, PaddingType padding_type)
-: padded_size_(padded_size), padding_type_(padding_type)
+UndoPaddingBoxes::UndoPaddingBoxes(
+  const cv::Size & padded_size, const cv::Size & pre_padding_size, PaddingType padding_type)
+: padded_size_(padded_size), pre_padding_size_(pre_padding_size), padding_type_(padding_type)
 {
   if (padded_size_.width <= 0 || padded_size_.height <= 0) {
     throw std::invalid_argument("UndoPaddingBoxes: Padded size dimensions must be positive.");
   }
-  if (padding_type_ == PaddingType::UNKNOWN) {
-    throw std::invalid_argument("UndoPaddingBoxes: Padding type cannot be UNKNOWN.");
+  if (pre_padding_size_.width <= 0 || pre_padding_size_.height <= 0) {
+    throw std::invalid_argument("UndoPaddingBoxes: Pre-padding size dimensions must be positive.");
   }
 }
 
-void UndoPaddingBoxes::apply(DetectionData & data, const cv::Size & original_image_size) const
+void UndoPaddingBoxes::apply(DetectionData & data) const
 {
-  if (original_image_size.width <= 0 || original_image_size.height <= 0) {
-    throw std::runtime_error("UndoPaddingBoxes::apply received invalid original_image_size.");
-  }
-  if (
-    padded_size_.width < original_image_size.width ||
-    padded_size_.height < original_image_size.height) {
-    // This might be valid if original image was larger and scaling shrunk it before padding
-    std::cerr << "Warning: Padded size is smaller than original size in UndoPaddingBoxes."
-              << std::endl;
-  }
+  double pad_width = padded_size_.width - pre_padding_size_.width;
+  double pad_height = padded_size_.height - pre_padding_size_.height;
+
+  // Clamp negative padding to zero (can happen if pre-padding size was already >= padded size)
+  pad_width = std::max(0.0, pad_width);
+  pad_height = std::max(0.0, pad_height);
+
+  double pad_left = 0.0;
+  double pad_top = 0.0;
 
   if (padding_type_ == PaddingType::CENTER) {
-    // Calculate padding added
-    double pad_width = padded_size_.width - original_image_size.width;
-    double pad_height = padded_size_.height - original_image_size.height;
-    double pad_left = pad_width / 2.0;
-    double pad_top = pad_height / 2.0;
+    pad_left = pad_width / 2.0;
+    pad_top = pad_height / 2.0;
+  } else if (padding_type_ == PaddingType::BOTTOM_RIGHT) {
+    pad_left = 0.0;
+    pad_top = 0.0;
+  }
+
+  // Adjust coordinates for kept boxes
+  for (int idx : data.kept_indices) {
+    cv::Rect2d & box = data.boxes[idx];
 
     // Shift coordinates back by subtracting the top-left padding
-    for (int idx : data.kept_indices) {
-      cv::Rect2d & box = data.boxes[idx];
-      box.x -= pad_left;
-      box.y -= pad_top;
+    box.x -= pad_left;
+    box.y -= pad_top;
 
-      // Optional: Clamp coordinates after shifting
-      box.x = std::max(0.0, box.x);
-      box.y = std::max(0.0, box.y);
-      box.width = std::min(static_cast<double>(original_image_size.width) - box.x, box.width);
-      box.height = std::min(static_cast<double>(original_image_size.height) - box.y, box.height);
-      box.width = std::max(0.0, box.width);
-      box.height = std::max(0.0, box.height);
-    }
-  } else if (padding_type_ == PaddingType::BOTTOM_RIGHT) {
-    // No coordinate shift needed for bottom-right padding.
-    // However, we might still want to clamp boxes to the original image boundaries
-    // in case rescaling made them extend beyond where the padding *would have been*.
-    for (int idx : data.kept_indices) {
-      cv::Rect2d & box = data.boxes[idx];
-      box.x = std::max(0.0, box.x);
-      box.y = std::max(0.0, box.y);
-      box.width = std::min(static_cast<double>(original_image_size.width) - box.x, box.width);
-      box.height = std::min(static_cast<double>(original_image_size.height) - box.y, box.height);
-      box.width = std::max(0.0, box.width);
-      box.height = std::max(0.0, box.height);
-    }
+    // Clamp coordinates to the boundaries of the PRE-PADDING image size
+    box.x = std::max(0.0, box.x);
+    box.y = std::max(0.0, box.y);
+    // Ensure x+width and y+height don't exceed pre_padding_size dimensions
+    box.width = std::min(static_cast<double>(pre_padding_size_.width) - box.x, box.width);
+    box.height = std::min(static_cast<double>(pre_padding_size_.height) - box.y, box.height);
+    // Ensure width/height are not negative if clamping pushes x/y too far
+    box.width = std::max(0.0, box.width);
+    box.height = std::max(0.0, box.height);
   }
 }
 
