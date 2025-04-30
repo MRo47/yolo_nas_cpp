@@ -25,7 +25,7 @@ PostProcessing::PostProcessing(
     float iou_threshold = nms_conf.at("iou").get<float>();
     post_processing_steps_.push_back(
       std::make_unique<NonMaximumSuppression>(conf_threshold, iou_threshold));
-    std::cout << "  + Added step: NonMaximumSuppression (Conf: " << conf_threshold
+    std::cout << "  Added step: NonMaximumSuppression (Conf: " << conf_threshold
               << ", IoU: " << iou_threshold << ")" << std::endl;
   } catch (const std::exception & e) {
     throw std::runtime_error("Failed to parse NMS configuration: " + std::string(e.what()));
@@ -56,7 +56,7 @@ PostProcessing::PostProcessing(
         post_processing_steps_.emplace_back(
           std::make_unique<UndoPaddingBoxes>(
             metadata.output_shape, metadata.input_shape, UndoPaddingBoxes::PaddingType::CENTER));
-        std::cout << "    [OK] Added step: UndoPaddingBoxes (CENTER, From " << metadata.output_shape
+        std::cout << "    Added step: UndoPaddingBoxes (CENTER, From " << metadata.output_shape
                   << " to " << metadata.input_shape << ")" << std::endl;
 
       } else if (metadata.step_name == "DetectionBottomRightPadding") {
@@ -64,7 +64,7 @@ PostProcessing::PostProcessing(
           std::make_unique<UndoPaddingBoxes>(
             metadata.output_shape, metadata.input_shape,
             UndoPaddingBoxes::PaddingType::BOTTOM_RIGHT));
-        std::cout << "    [OK] Added step: UndoPaddingBoxes (BOTTOM_RIGHT, From "
+        std::cout << "    Added step: UndoPaddingBoxes (BOTTOM_RIGHT, From "
                   << metadata.output_shape << " to " << metadata.input_shape << ")" << std::endl;
 
       } else {
