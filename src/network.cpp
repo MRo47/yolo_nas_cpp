@@ -200,7 +200,7 @@ void DetectionNetwork::parse_network_output(
   class_ids.reserve(num_detections);
 
   for (int i = 0; i < num_detections; ++i) {
-    const float * box_data = box_mat.ptr<float>(i);      // Pointer to [cx, cy, w, h] (assumed)
+    const float * box_data = box_mat.ptr<float>(i);      // Pointer to [left, top, right, bottom]
     const float * score_data = score_mat.ptr<float>(i);  // Pointer to [score_cls0, score_cls1, ...]
 
     // Find the class with the highest score for this detection
@@ -209,17 +209,13 @@ void DetectionNetwork::parse_network_output(
     int max_class_id =
       static_cast<int>(std::distance(score_data, max_score_it));  // The index (class ID)
 
-    // Extract bounding box: [center_x, center_y, width, height] format
-    float cx = box_data[0];
-    float cy = box_data[1];
-    float w = box_data[2];
-    float h = box_data[3];
+    // Extract bounding box: [left, top, right, bottom] format
+    float x = box_data[0];
+    float y = box_data[1];
+    float w = box_data[2] - x;
+    float h = box_data[3] - y;
 
-    // Convert center coordinates (cx, cy) to top-left corner (x, y)
-    double x = static_cast<double>(cx - w * 0.5f);
-    double y = static_cast<double>(cy - h * 0.5f);
-
-    boxes.emplace_back(x, y, static_cast<double>(w), static_cast<double>(h));
+    boxes.emplace_back(x, y, w, h);
     scores.push_back(max_score);
     class_ids.push_back(max_class_id);
   }
