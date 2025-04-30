@@ -74,9 +74,6 @@ private:
 class PreProcessingStep
 {
 public:
-  /**
-   * @brief Virtual destructor
-   */
   virtual ~PreProcessingStep() = default;
 
   /**

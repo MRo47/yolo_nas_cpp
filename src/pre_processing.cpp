@@ -67,7 +67,7 @@ PreProcessing::PreProcessing(const json & config, const cv::Size input_shape)
     const json & params = it.value();
 
     try {
-      // Create step and get metadata, passing the input shape from the previous step
+      // Create step and get metadata, passing the output shape from the previous step
       auto [step_ptr, metadata] =
         PreProcessingStep::create_from_json(step_name, params, current_shape);
 
@@ -108,6 +108,7 @@ void PreProcessing::run(const cv::Mat & input, cv::Mat & output)
     const auto & step = processing_steps_[i];
     step->apply(temp_input, temp_output);
 
+    // shallow copy until last step
     if (i < processing_steps_.size() - 1) {
       temp_input = temp_output;
     }
@@ -154,7 +155,8 @@ NormalizeImage::NormalizeImage(const json & params)
 
     if (mean_.size() != 3 || std_.size() != 3) {
       throw std::runtime_error(
-        "NormalizeImage requires 'mean' and 'std' to be arrays of exactly 3 numbers.");
+        "NormalizeImage requires 'mean' and 'std' to be arrays of exactly 3 numbers (1 per "
+        "channel).");
     }
     for (double val : std_) {
       if (std::abs(val) < 1e-9) {
@@ -355,6 +357,7 @@ std::string DetectionLongestMaxSizeRescale::name() const
 cv::Size DetectionLongestMaxSizeRescale::calculate_output_shape(const cv::Size & input_shape) const
 {
   if (input_shape.width <= 0 || input_shape.height <= 0) {
+    std::cerr << "Warning: DetectionLongestMaxSizeRescale input shape is unknown." << std::endl;
     return {-1, -1};
   }
 
@@ -362,14 +365,14 @@ cv::Size DetectionLongestMaxSizeRescale::calculate_output_shape(const cv::Size &
     static_cast<float>(out_shape_.height) / static_cast<float>(input_shape.height),
     static_cast<float>(out_shape_.width) / static_cast<float>(input_shape.width));
 
-  if (std::abs(scale_factor - 1.0f) > 1e-6) {
-    int new_height = static_cast<int>(std::round(input_shape.height * scale_factor));
-    int new_width = static_cast<int>(std::round(input_shape.width * scale_factor));
-
-    return {new_width, new_height};
+  if (std::abs(scale_factor - 1.0f) < 1e-6) {
+    return input_shape;
   }
 
-  return input_shape;
+  int new_height = static_cast<int>(std::round(input_shape.height * scale_factor));
+  int new_width = static_cast<int>(std::round(input_shape.width * scale_factor));
+
+  return {new_width, new_height};
 }
 
 DetectionRescale::DetectionRescale(const json & params)
@@ -394,7 +397,6 @@ void DetectionRescale::apply(const cv::Mat & input, cv::Mat & output) const
   if (input.empty()) {
     throw std::runtime_error("DetectionRescale::apply received an empty input image.");
   }
-  // Resize directly to the target shape, ignoring aspect ratio
   cv::resize(input, output, out_shape_, 0, 0, cv::INTER_LINEAR);
 }
 
