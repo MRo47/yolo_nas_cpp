@@ -4,6 +4,7 @@
 #include <string>
 
 #include "yolo_nas_cpp/network.hpp"
+#include "yolo_nas_cpp/utils.hpp"
 
 int main(int argc, char ** argv)
 {
@@ -25,5 +26,13 @@ int main(int argc, char ** argv)
 
   yolo_nas_cpp::DetectionData detections = network.detect(image);
   std::cout << "Num detections: " << detections.kept_indices.size() << std::endl;
+
+  cv::Mat output_image =
+    yolo_nas_cpp::draw_detections(image, detections, network.get_class_labels());
+
+  cv::namedWindow("Detections", cv::WINDOW_NORMAL);
+  cv::imshow("Detections", output_image);
+  cv::waitKey(0);
+
   return 0;
 }
