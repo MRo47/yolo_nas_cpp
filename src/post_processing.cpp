@@ -130,7 +130,7 @@ void NonMaximumSuppression::apply(DetectionData & data) const
 std::string NonMaximumSuppression::name() const { return "NonMaximumSuppression"; }
 
 RescaleBoxes::RescaleBoxes(const PreProcessingMetadata & metadata)
-: pre_scaling_image_size_(metadata.input_shape)  // The target size after inverse scaling
+: pre_scaling_image_size_(metadata.input_shape)
 {
   // The input to this step is the output of the preprocessing step
   const cv::Size & rescaled_image_size = metadata.output_shape;
