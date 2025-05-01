@@ -67,7 +67,7 @@ private:
   /**
    * @brief Parses the raw network output tensors into boxes, scores, and class IDs.
    * @param raw_outputs Vector of cv::Mat objects from net_.forward().
-   * @param boxes Output vector to be filled with detected bounding boxes (left, top, w, h).
+   * @param boxes Output vector to be filled with detected bounding boxes (left, top, right, bottom).
    * @param scores Output vector to be filled with the confidence scores of the detections.
    * @param class_ids Output vector to be filled with the class IDs of the detections.
    * @note This implementation assumes a specific output format as in YOLO-NAS
@@ -82,8 +82,8 @@ private:
   std::unique_ptr<PostProcessing> post_processing_pipeline_;
 
   std::string network_type_;
-  cv::Size network_input_size_;
-  cv::Size image_input_shape_;
+  cv::Size network_input_size_;  // actual network input image size after pre-processing
+  cv::Size image_input_shape_;   // expected input image size
   std::vector<std::string> class_labels_;
   std::vector<std::string> output_layer_names_;
 };

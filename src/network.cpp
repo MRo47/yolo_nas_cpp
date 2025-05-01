@@ -47,14 +47,8 @@ DetectionNetwork::DetectionNetwork(
 
     output_layer_names_ = net_.getUnconnectedOutLayersNames();
     if (output_layer_names_.empty()) {
-      std::cerr << "Warning: Could not get output layer names from the loaded network."
-                << std::endl;
-    } else {
-      std::cout << "Network output layer names: ";
-      for (const auto & name : output_layer_names_) {
-        std::cout << name << " ";
-      }
-      std::cout << std::endl;
+      throw std::runtime_error(
+        "Could not get output layer names from the loaded network, required to perform inference.");
     }
 
   } catch (const cv::Exception & e) {
@@ -109,7 +103,6 @@ DetectionData DetectionNetwork::detect(const cv::Mat & input_image)
   cv::Mat processed_image;
   pre_processing_pipeline_->run(input_image, processed_image);
 
-  // TODO(myron): Add this as a final preprocessing step
   cv::Mat blob;
   blob = cv::dnn::blobFromImage(
     processed_image, 1, network_input_size_, cv::Scalar(0, 0, 0), true, false, CV_32F);
@@ -126,6 +119,7 @@ DetectionData DetectionNetwork::detect(const cv::Mat & input_image)
     throw std::runtime_error("Failed to parse network output: " + std::string(e.what()));
   }
 
+  // If boxes were found, keep all indices before any post-processing (NMS will be applied later)
   if (!detection_results.boxes.empty()) {
     detection_results.kept_indices.resize(detection_results.boxes.size());
     std::iota(detection_results.kept_indices.begin(), detection_results.kept_indices.end(), 0);
