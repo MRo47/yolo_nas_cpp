@@ -48,23 +48,23 @@ PostProcessing::PostProcessing(
         metadata.step_name == "DetectionLongestMaxSizeRescale" ||
         metadata.step_name == "DetectionRescale") {
         post_processing_steps_.emplace_back(
-          std::make_unique<UndoRescaleBoxes>(metadata.output_shape, metadata.input_shape));
-        std::cout << "    Added step: UndoRescaleBoxes (From " << metadata.output_shape << " to "
+          std::make_unique<RescaleBoxes>(metadata.output_shape, metadata.input_shape));
+        std::cout << "    Added step: RescaleBoxes (From " << metadata.output_shape << " to "
                   << metadata.input_shape << ")" << std::endl;
 
       } else if (metadata.step_name == "DetectionCenterPadding") {
         post_processing_steps_.emplace_back(
-          std::make_unique<UndoPaddingBoxes>(
-            metadata.output_shape, metadata.input_shape, UndoPaddingBoxes::PaddingType::CENTER));
-        std::cout << "    Added step: UndoPaddingBoxes (CENTER, From " << metadata.output_shape
+          std::make_unique<ShiftBoxes>(
+            metadata.output_shape, metadata.input_shape, ShiftBoxes::PaddingType::CENTER));
+        std::cout << "    Added step: ShiftBoxes (CENTER, From " << metadata.output_shape
                   << " to " << metadata.input_shape << ")" << std::endl;
 
       } else if (metadata.step_name == "DetectionBottomRightPadding") {
         post_processing_steps_.emplace_back(
-          std::make_unique<UndoPaddingBoxes>(
+          std::make_unique<ShiftBoxes>(
             metadata.output_shape, metadata.input_shape,
-            UndoPaddingBoxes::PaddingType::BOTTOM_RIGHT));
-        std::cout << "    Added step: UndoPaddingBoxes (BOTTOM_RIGHT, From "
+            ShiftBoxes::PaddingType::BOTTOM_RIGHT));
+        std::cout << "    Added step: ShiftBoxes (BOTTOM_RIGHT, From "
                   << metadata.output_shape << " to " << metadata.input_shape << ")" << std::endl;
 
       } else {
@@ -146,21 +146,21 @@ void NonMaximumSuppression::apply(DetectionData & data) const
 
 std::string NonMaximumSuppression::name() const { return "NonMaximumSuppression"; }
 
-UndoRescaleBoxes::UndoRescaleBoxes(
+RescaleBoxes::RescaleBoxes(
   const cv::Size & rescaled_image_size, const cv::Size & pre_scaling_image_size)
 : pre_scaling_image_size_(pre_scaling_image_size)
 {
   if (rescaled_image_size.width <= 0 || rescaled_image_size.height <= 0) {
-    throw std::invalid_argument("UndoRescaleBoxes: Processed size dimensions must be positive.");
+    throw std::invalid_argument("RescaleBoxes: Processed size dimensions must be positive.");
   }
   if (pre_scaling_image_size.width <= 0 || pre_scaling_image_size.height <= 0) {
-    throw std::invalid_argument("UndoRescaleBoxes: Pre-scaling size dimensions must be positive.");
+    throw std::invalid_argument("RescaleBoxes: Pre-scaling size dimensions must be positive.");
   }
   scale_x_ = static_cast<double>(pre_scaling_image_size.width) / rescaled_image_size.width;
   scale_y_ = static_cast<double>(pre_scaling_image_size.height) / rescaled_image_size.height;
 }
 
-void UndoRescaleBoxes::apply(DetectionData & data) const
+void RescaleBoxes::apply(DetectionData & data) const
 {
   for (int idx : data.kept_indices) {
     cv::Rect2d & box = data.boxes[idx];
@@ -181,21 +181,21 @@ void UndoRescaleBoxes::apply(DetectionData & data) const
   }
 }
 
-std::string UndoRescaleBoxes::name() const { return "UndoRescaleBoxes"; }
+std::string RescaleBoxes::name() const { return "RescaleBoxes"; }
 
-UndoPaddingBoxes::UndoPaddingBoxes(
+ShiftBoxes::ShiftBoxes(
   const cv::Size & padded_size, const cv::Size & pre_padding_size, PaddingType padding_type)
 : padded_size_(padded_size), pre_padding_size_(pre_padding_size), padding_type_(padding_type)
 {
   if (padded_size_.width <= 0 || padded_size_.height <= 0) {
-    throw std::invalid_argument("UndoPaddingBoxes: Padded size dimensions must be positive.");
+    throw std::invalid_argument("ShiftBoxes: Padded size dimensions must be positive.");
   }
   if (pre_padding_size_.width <= 0 || pre_padding_size_.height <= 0) {
-    throw std::invalid_argument("UndoPaddingBoxes: Pre-padding size dimensions must be positive.");
+    throw std::invalid_argument("ShiftBoxes: Pre-padding size dimensions must be positive.");
   }
 }
 
-void UndoPaddingBoxes::apply(DetectionData & data) const
+void ShiftBoxes::apply(DetectionData & data) const
 {
   double pad_width = padded_size_.width - pre_padding_size_.width;
   double pad_height = padded_size_.height - pre_padding_size_.height;
@@ -235,15 +235,15 @@ void UndoPaddingBoxes::apply(DetectionData & data) const
   }
 }
 
-std::string UndoPaddingBoxes::name() const
+std::string ShiftBoxes::name() const
 {
   switch (padding_type_) {
     case PaddingType::CENTER:
-      return "UndoPaddingBoxes(Center)";
+      return "ShiftBoxes(Center)";
     case PaddingType::BOTTOM_RIGHT:
-      return "UndoPaddingBoxes(BottomRight)";
+      return "ShiftBoxes(BottomRight)";
     default:
-      return "UndoPaddingBoxes(Unknown)";
+      return "ShiftBoxes(Unknown)";
   }
 }
 

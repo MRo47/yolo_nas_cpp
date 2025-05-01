@@ -56,9 +56,6 @@ private:
 class PostProcessingStep
 {
 public:
-  /**
-   * @brief Virtual destructor.
-   */
   virtual ~PostProcessingStep() = default;
 
   /**
@@ -100,21 +97,21 @@ private:
 };
 
 /**
- * @class UndoRescaleBoxes
+ * @class RescaleBoxes
  * @brief Rescales bounding box coordinates back to the original image dimensions.
  *
  * This step reverses the effect of a preprocessing rescaling step
  * (like DetectionLongestMaxSizeRescale or DetectionRescale).
  */
-class UndoRescaleBoxes : public PostProcessingStep
+class RescaleBoxes : public PostProcessingStep
 {
 public:
   /**
    * @brief Constructor.
-   * @param processed_size The size (WxH) the image was rescaled TO during preprocessing
+   * @param processed_size The size (WxH) the image was rescaled to during preprocessing
    *                       (i.e., the input size for the padding step, if any, or the network input size).
    */
-  explicit UndoRescaleBoxes(
+  explicit RescaleBoxes(
     const cv::Size & rescaled_image_size, const cv::Size & pre_scaling_image_size);
 
   void apply(DetectionData & data) const override;
@@ -127,12 +124,12 @@ private:
 };
 
 /**
- * @class UndoPaddingBoxes
+ * @class ShiftBoxes
  * @brief Adjusts bounding box coordinates to reverse the effect of a padding operation.
  *
  * Maps coordinates from the padded image space back to the space before padding was applied.
  */
-class UndoPaddingBoxes : public PostProcessingStep
+class ShiftBoxes : public PostProcessingStep
 {
 public:
   enum class PaddingType
@@ -147,7 +144,7 @@ public:
    * @param pre_padding_size The size (WxH) the image had immediately BEFORE padding was applied.
    * @param padding_type The type of padding applied (Center or BottomRight).
    */
-  UndoPaddingBoxes(
+  ShiftBoxes(
     const cv::Size & padded_size, const cv::Size & pre_padding_size, PaddingType padding_type);
 
   // Apply method now uses pre_padding_size_ for calculations
