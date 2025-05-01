@@ -140,8 +140,8 @@ public:
 
   /**
    * @brief Constructor.
-   * @param padded_size The size (WxH) the image was padded TO during preprocessing.
-   * @param pre_padding_size The size (WxH) the image had immediately BEFORE padding was applied.
+   * @param padded_size The size (WxH) the image was padded to during preprocessing.
+   * @param pre_padding_size The size (WxH) the image had immediately before padding was applied.
    * @param padding_type The type of padding applied (Center or BottomRight).
    */
   ShiftBoxes(
