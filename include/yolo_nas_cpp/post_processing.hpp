@@ -31,7 +31,7 @@ public:
   /**
    * @brief Constructs the post-processing pipeline.
    *
-   * The constructor now delegates the parsing of specific parameters to the
+   * The constructor delegates the parsing of specific parameters to the
    * individual step constructors or a factory method for inverse steps.
    *
    * @param post_processing_config JSON object for post-processing specific steps (e.g., NMS).
@@ -82,9 +82,9 @@ public:
    * @brief Factory method to create an inverse geometric post-processing step
    *        from preprocessing metadata.
    * @param metadata The metadata from the corresponding preprocessing step.
-   * @return A unique_ptr to the created PostProcessingStep.
-   * @throws std::runtime_error if the metadata does not correspond to a known inverse step type,
-   *                            or if step creation/parameter extraction fails.
+   * @return A unique_ptr to the created PostProcessingStep, or nullptr if the metadata
+   *         does not correspond to a known inverse step type.
+   * @throws std::runtime_error if step creation/parameter extraction fails for a known type.
    */
   static std::unique_ptr<PostProcessingStep> create_inverse_from_metadata(
     const PreProcessingMetadata & metadata);
@@ -148,32 +148,21 @@ private:
 };
 
 /**
- * @class ShiftBoxes
- * @brief Adjusts bounding box coordinates to reverse the effect of a padding operation.
+ * @class CenterShiftBoxes
+ * @brief Adjusts bounding box coordinates to reverse the effect of a center padding operation.
  *
  * Maps coordinates from the padded image space back to the space before padding was applied.
  * Parameters are extracted from PreProcessingMetadata.
  */
-class ShiftBoxes : public PostProcessingStep
+class CenterShiftBoxes : public PostProcessingStep
 {
 public:
-  enum class PaddingType
-  {
-    CENTER,
-    BOTTOM_RIGHT
-  };
-
   /**
-   * @brief Constructor. Extracts sizes and padding type from the provided PreProcessingMetadata.
-   *
-   * Assumes the metadata represents a padding step, using output_shape as the
-   * padded size and input_shape as the size before padding. Determines padding
-   * type from metadata.step_name.
-   *
-   * @param metadata Metadata from the corresponding preprocessing step.
-   * @throws std::invalid_argument if metadata contains invalid size dimensions or unknown step name.
+   * @brief Constructor. Extracts sizes from the provided PreProcessingMetadata.
+   * @param metadata Metadata from the corresponding "DetectionCenterPadding" step.
+   * @throws std::invalid_argument if metadata contains invalid size dimensions.
    */
-  explicit ShiftBoxes(const PreProcessingMetadata & metadata);
+  explicit CenterShiftBoxes(const PreProcessingMetadata & metadata);
 
   void apply(DetectionData & data) const override;
   std::string name() const override;
@@ -181,7 +170,31 @@ public:
 private:
   cv::Size padded_size_;
   cv::Size pre_padding_size_;
-  PaddingType padding_type_;
+};
+
+/**
+ * @class BottomRightShiftBoxes
+ * @brief Adjusts bounding box coordinates to reverse the effect of a bottom-right padding operation.
+ *
+ * Maps coordinates from the padded image space back to the space before padding was applied.
+ * Parameters are extracted from PreProcessingMetadata.
+ */
+class BottomRightShiftBoxes : public PostProcessingStep
+{
+public:
+  /**
+   * @brief Constructor. Extracts sizes from the provided PreProcessingMetadata.
+   * @param metadata Metadata from the corresponding "DetectionBottomRightPadding" step.
+   * @throws std::invalid_argument if metadata contains invalid size dimensions.
+   */
+  explicit BottomRightShiftBoxes(const PreProcessingMetadata & metadata);
+
+  void apply(DetectionData & data) const override;
+  std::string name() const override;
+
+private:
+  cv::Size padded_size_;
+  cv::Size pre_padding_size_;
 };
 
 }  // namespace yolo_nas_cpp

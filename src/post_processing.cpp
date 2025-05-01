@@ -91,10 +91,10 @@ std::unique_ptr<PostProcessingStep> PostProcessingStep::create_inverse_from_meta
     metadata.step_name == "DetectionLongestMaxSizeRescale" ||
     metadata.step_name == "DetectionRescale") {
     return std::make_unique<RescaleBoxes>(metadata);
-  } else if (
-    metadata.step_name == "DetectionCenterPadding" ||
-    metadata.step_name == "DetectionBottomRightPadding") {
-    return std::make_unique<ShiftBoxes>(metadata);
+  } else if (metadata.step_name == "DetectionCenterPadding") {
+    return std::make_unique<CenterShiftBoxes>(metadata);
+  } else if (metadata.step_name == "DetectionBottomRightPadding") {
+    return std::make_unique<BottomRightShiftBoxes>(metadata);
   }
   return nullptr;
 }
@@ -209,52 +209,35 @@ void RescaleBoxes::apply(DetectionData & data) const
 
 std::string RescaleBoxes::name() const { return "RescaleBoxes"; }
 
-ShiftBoxes::ShiftBoxes(const PreProcessingMetadata & metadata)
+CenterShiftBoxes::CenterShiftBoxes(const PreProcessingMetadata & metadata)
 : padded_size_(metadata.output_shape), pre_padding_size_(metadata.input_shape)
 {
   if (padded_size_.width <= 0 || padded_size_.height <= 0) {
     throw std::invalid_argument(
-      "ShiftBoxes constructor: Source size (" + std::to_string(padded_size_.width) + "x" +
+      "CenterShiftBoxes constructor: Source size (" + std::to_string(padded_size_.width) + "x" +
       std::to_string(padded_size_.height) + ") from metadata (" + metadata.step_name +
       ") dimensions must be positive.");
   }
   if (pre_padding_size_.width <= 0 || pre_padding_size_.height <= 0) {
     throw std::invalid_argument(
-      "ShiftBoxes constructor: Target size (" + std::to_string(pre_padding_size_.width) + "x" +
-      std::to_string(pre_padding_size_.height) + ") from metadata (" + metadata.step_name +
+      "CenterShiftBoxes constructor: Target size (" + std::to_string(pre_padding_size_.width) +
+      "x" + std::to_string(pre_padding_size_.height) + ") from metadata (" + metadata.step_name +
       ") dimensions must be positive.");
-  }
-
-  if (metadata.step_name == "DetectionCenterPadding") {
-    padding_type_ = PaddingType::CENTER;
-  } else if (metadata.step_name == "DetectionBottomRightPadding") {
-    padding_type_ = PaddingType::BOTTOM_RIGHT;
-  } else {
-    throw std::invalid_argument(
-      "ShiftBoxes constructor: Unexpected step name in metadata: '" + metadata.step_name +
-      "'. This constructor should only be called for known padding types.");
   }
 }
 
-void ShiftBoxes::apply(DetectionData & data) const
+void CenterShiftBoxes::apply(DetectionData & data) const
 {
   double pad_width = padded_size_.width - pre_padding_size_.width;
   double pad_height = padded_size_.height - pre_padding_size_.height;
 
-  // Clamp negative padding to zero (can happen if pre-padding size was already >= padded size)
+  // Clamp negative padding to zero (shouldn't happen with correct metadata)
   pad_width = std::max(0.0, pad_width);
   pad_height = std::max(0.0, pad_height);
 
-  double pad_left = 0.0;
-  double pad_top = 0.0;
-
-  if (padding_type_ == PaddingType::CENTER) {
-    pad_left = pad_width / 2.0;
-    pad_top = pad_height / 2.0;
-  } else if (padding_type_ == PaddingType::BOTTOM_RIGHT) {
-    pad_left = 0.0;
-    pad_top = 0.0;
-  }
+  // Center padding applies half the total padding to the top/left
+  double pad_left = pad_width / 2.0;
+  double pad_top = pad_height / 2.0;
 
   // Adjust coordinates for kept boxes
   for (int idx : data.kept_indices) {
@@ -276,16 +259,57 @@ void ShiftBoxes::apply(DetectionData & data) const
   }
 }
 
-std::string ShiftBoxes::name() const
+std::string CenterShiftBoxes::name() const { return "CenterShiftBoxes"; }
+
+BottomRightShiftBoxes::BottomRightShiftBoxes(const PreProcessingMetadata & metadata)
+: padded_size_(metadata.output_shape), pre_padding_size_(metadata.input_shape)
 {
-  switch (padding_type_) {
-    case PaddingType::CENTER:
-      return "ShiftBoxes(Center)";
-    case PaddingType::BOTTOM_RIGHT:
-      return "ShiftBoxes(BottomRight)";
-    default:
-      return "ShiftBoxes(Unknown)";
+  if (padded_size_.width <= 0 || padded_size_.height <= 0) {
+    throw std::invalid_argument(
+      "BottomRightShiftBoxes constructor: Source size (" + std::to_string(padded_size_.width) +
+      "x" + std::to_string(padded_size_.height) + ") from metadata (" + metadata.step_name +
+      ") dimensions must be positive.");
+  }
+  if (pre_padding_size_.width <= 0 || pre_padding_size_.height <= 0) {
+    throw std::invalid_argument(
+      "BottomRightShiftBoxes constructor: Target size (" + std::to_string(pre_padding_size_.width) +
+      "x" + std::to_string(pre_padding_size_.height) + ") from metadata (" + metadata.step_name +
+      ") dimensions must be positive.");
   }
 }
+
+void BottomRightShiftBoxes::apply(DetectionData & data) const
+{
+  double pad_width = padded_size_.width - pre_padding_size_.width;
+  double pad_height = padded_size_.height - pre_padding_size_.height;
+
+  // Clamp negative padding to zero (shouldn't happen with correct metadata)
+  pad_width = std::max(0.0, pad_width);
+  pad_height = std::max(0.0, pad_height);
+
+  double pad_left = 0.0;
+  double pad_top = 0.0;
+
+  // Adjust coordinates for kept boxes
+  for (int idx : data.kept_indices) {
+    cv::Rect2d & box = data.boxes[idx];
+
+    // Shift coordinates back by subtracting the top-left padding (which is 0,0 here)
+    box.x -= pad_left;
+    box.y -= pad_top;
+
+    // Clamp coordinates to the boundaries of the PRE-PADDING image size
+    box.x = std::max(0.0, box.x);
+    box.y = std::max(0.0, box.y);
+    // Ensure x+width and y+height don't exceed pre_padding_size dimensions
+    box.width = std::min(static_cast<double>(pre_padding_size_.width) - box.x, box.width);
+    box.height = std::min(static_cast<double>(pre_padding_size_.height) - box.y, box.height);
+    // Ensure width/height are not negative if clamping pushes x/y too far
+    box.width = std::max(0.0, box.width);
+    box.height = std::max(0.0, box.height);
+  }
+}
+
+std::string BottomRightShiftBoxes::name() const { return "BottomRightShiftBoxes"; }
 
 }  // namespace yolo_nas_cpp
