@@ -118,6 +118,11 @@ public:
 class StandardizeImage : public PreProcessingStep
 {
 public:
+  /**
+   * @brief StandardizeImage constructor
+   * 
+   * @param params json params, required param: max_value(double), image scaled as img/max_value
+   */
   explicit StandardizeImage(const json & params);
   void apply(const cv::Mat & input, cv::Mat & output) const override;
   std::string name() const override;
@@ -134,6 +139,12 @@ private:
 class NormalizeImage : public PreProcessingStep
 {
 public:
+  /**
+   * @brief NormalizeImage constructor
+   * 
+   * @param params json params, required params: mean(std::vector<double>), std(std::vector<double>)
+   * image normalized as (img - mean) / std
+   */
   explicit NormalizeImage(const json & params);
   void apply(const cv::Mat & input, cv::Mat & output) const override;
   std::string name() const override;
@@ -151,6 +162,11 @@ private:
 class DetectionCenterPadding : public PreProcessingStep
 {
 public:
+  /**
+   * @brief Construct a new Detection Center Padding object
+   * 
+   * @param params json params, required param: pad_value(int), output shape(list<int>)
+   */
   explicit DetectionCenterPadding(const json & params);
   void apply(const cv::Mat & input, cv::Mat & output) const override;
   std::string name() const override;
@@ -168,6 +184,11 @@ private:
 class DetectionBottomRightPadding : public PreProcessingStep
 {
 public:
+  /**
+   * @brief Construct a new Detection Bottom Right Padding object
+   * 
+   * @param params json params, required param: pad_value(int), output shape(list<int>)
+   */
   explicit DetectionBottomRightPadding(const json & params);
   void apply(const cv::Mat & input, cv::Mat & output) const override;
   std::string name() const override;
@@ -186,6 +207,11 @@ private:
 class PassthroughStep : public PreProcessingStep
 {
 public:
+  /**
+   * @brief Construct a new Passthrough Step object
+   * 
+   * @param params json params, not used
+   */
   explicit PassthroughStep(const json & /*params*/);
   void apply(const cv::Mat & input, cv::Mat & output) const override;
   std::string name() const override;
@@ -199,6 +225,11 @@ public:
 class DetectionLongestMaxSizeRescale : public PreProcessingStep
 {
 public:
+  /**
+   * @brief Construct a new Detection Longest Max Size Rescale object
+   * 
+   * @param params json params, required param: out_shape(list<int>)
+   */
   explicit DetectionLongestMaxSizeRescale(const json & params);
   void apply(const cv::Mat & input, cv::Mat & output) const override;
   std::string name() const override;
@@ -215,6 +246,11 @@ private:
 class DetectionRescale : public PreProcessingStep
 {
 public:
+  /**
+   * @brief Construct a new Detection Rescale object
+   * 
+   * @param params json params, required param: out_shape(list<int>)
+   */
   explicit DetectionRescale(const json & params);
   void apply(const cv::Mat & input, cv::Mat & output) const override;
   std::string name() const override;
