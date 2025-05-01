@@ -1,9 +1,9 @@
 #include "yolo_nas_cpp/post_processing.hpp"
 
-#include <algorithm>  // For std::reverse, std::max/min
+#include <algorithm>
 #include <iostream>
-#include <numeric>          // For std::iota
-#include <opencv2/dnn.hpp>  // For NMSBoxes
+#include <numeric>
+#include <opencv2/dnn.hpp>
 #include <stdexcept>
 #include <vector>
 
@@ -21,14 +21,15 @@ PostProcessing::PostProcessing(
   // 1. Add NMS Step
   try {
     const auto & nms_conf = post_processing_config.at("NMS");
-    float conf_threshold = nms_conf.at("conf").get<float>();
-    float iou_threshold = nms_conf.at("iou").get<float>();
     post_processing_steps_.push_back(
-      std::make_unique<NonMaximumSuppression>(conf_threshold, iou_threshold));
-    std::cout << "  Added step: NonMaximumSuppression (Conf: " << conf_threshold
-              << ", IoU: " << iou_threshold << ")" << std::endl;
+      std::make_unique<NonMaximumSuppression>(nms_conf));  // Pass the JSON sub-object
+    std::cout << "  Added step: " << post_processing_steps_.back()->name() << std::endl;
+  } catch (const json::exception & e) {
+    throw std::runtime_error(
+      "Failed to find or parse 'NMS' configuration: " + std::string(e.what()));
   } catch (const std::exception & e) {
-    throw std::runtime_error("Failed to parse NMS configuration: " + std::string(e.what()));
+    throw std::runtime_error(
+      "Failed to create NonMaximumSuppression step: " + std::string(e.what()));
   }
 
   // 2. Add Inverse Preprocessing Steps (in reverse order with size tracking)
@@ -42,44 +43,29 @@ PostProcessing::PostProcessing(
               << " (Input: " << metadata.input_shape << ", Output: " << metadata.output_shape << ")"
               << std::endl;
 
-    // Determine which inverse step to add based on the pre-processing step name
     try {
-      if (
-        metadata.step_name == "DetectionLongestMaxSizeRescale" ||
-        metadata.step_name == "DetectionRescale") {
-        post_processing_steps_.emplace_back(
-          std::make_unique<RescaleBoxes>(metadata.output_shape, metadata.input_shape));
-        std::cout << "    Added step: RescaleBoxes (From " << metadata.output_shape << " to "
-                  << metadata.input_shape << ")" << std::endl;
+      // Use the factory method to create the inverse step
+      std::unique_ptr<PostProcessingStep> inverse_step =
+        PostProcessingStep::create_inverse_from_metadata(metadata);
 
-      } else if (metadata.step_name == "DetectionCenterPadding") {
-        post_processing_steps_.emplace_back(
-          std::make_unique<ShiftBoxes>(
-            metadata.output_shape, metadata.input_shape, ShiftBoxes::PaddingType::CENTER));
-        std::cout << "    Added step: ShiftBoxes (CENTER, From " << metadata.output_shape
-                  << " to " << metadata.input_shape << ")" << std::endl;
-
-      } else if (metadata.step_name == "DetectionBottomRightPadding") {
-        post_processing_steps_.emplace_back(
-          std::make_unique<ShiftBoxes>(
-            metadata.output_shape, metadata.input_shape,
-            ShiftBoxes::PaddingType::BOTTOM_RIGHT));
-        std::cout << "    Added step: ShiftBoxes (BOTTOM_RIGHT, From "
-                  << metadata.output_shape << " to " << metadata.input_shape << ")" << std::endl;
-
+      if (inverse_step) {
+        post_processing_steps_.push_back(std::move(inverse_step));
+        std::cout << "    Added step: " << post_processing_steps_.back()->name() << std::endl;
       } else {
-        std::cout << "    Skipping non-geometric step: " << metadata.step_name << std::endl;
-        // If shape tracking mismatched, warning was already printed.
+        // The factory returns nullptr if the step name is not a known inverse geometric type
+        std::cout << "    Skipping non-geometric/non-inverse step: " << metadata.step_name
+                  << std::endl;
         if (metadata.output_shape != metadata.input_shape) {
-          std::cerr << "Warning: Non-geometric step '" << metadata.step_name
+          std::cerr << "Warning: Preprocessing step '" << metadata.step_name
                     << "' changed shape from " << metadata.input_shape << " to "
-                    << metadata.output_shape << ", but no inverse geometric step added."
+                    << metadata.output_shape << ", but no inverse geometric step was created."
                     << std::endl;
         }
       }
     } catch (const std::exception & e) {
+      // Catch exceptions thrown by the factory or step constructors
       throw std::runtime_error(
-        "Failed to create inverse step for '" + metadata.step_name + "': " + e.what());
+        "Failed to create inverse step for metadata '" + metadata.step_name + "': " + e.what());
     }
   }
   std::cout << "PostProcessing pipeline initialization complete. Total steps: "
@@ -98,14 +84,41 @@ void PostProcessing::run(DetectionData & data, const cv::Size & /*original_image
   }
 }
 
-NonMaximumSuppression::NonMaximumSuppression(float conf_threshold, float iou_threshold)
-: conf_threshold_(conf_threshold), iou_threshold_(iou_threshold)
+std::unique_ptr<PostProcessingStep> PostProcessingStep::create_inverse_from_metadata(
+  const PreProcessingMetadata & metadata)
 {
-  if (conf_threshold < 0.0f || conf_threshold > 1.0f) {
-    throw std::invalid_argument("NMS confidence threshold must be between 0.0 and 1.0");
+  if (
+    metadata.step_name == "DetectionLongestMaxSizeRescale" ||
+    metadata.step_name == "DetectionRescale") {
+    return std::make_unique<RescaleBoxes>(metadata);
+  } else if (
+    metadata.step_name == "DetectionCenterPadding" ||
+    metadata.step_name == "DetectionBottomRightPadding") {
+    return std::make_unique<ShiftBoxes>(metadata);
   }
-  if (iou_threshold < 0.0f || iou_threshold > 1.0f) {
-    throw std::invalid_argument("NMS IoU threshold must be between 0.0 and 1.0");
+  return nullptr;
+}
+
+NonMaximumSuppression::NonMaximumSuppression(const json & params)
+{
+  try {
+    conf_threshold_ = params.at("conf").get<float>();
+    iou_threshold_ = params.at("iou").get<float>();
+  } catch (const json::exception & e) {
+    throw std::runtime_error(
+      "NonMaximumSuppression constructor failed to parse JSON parameters: " +
+      std::string(e.what()));
+  }
+
+  if (conf_threshold_ < 0.0f || conf_threshold_ > 1.0f) {
+    throw std::invalid_argument(
+      "NMS confidence threshold must be between 0.0 and 1.0 (parsed: " +
+      std::to_string(conf_threshold_) + ")");
+  }
+  if (iou_threshold_ < 0.0f || iou_threshold_ > 1.0f) {
+    throw std::invalid_argument(
+      "NMS IoU threshold must be between 0.0 and 1.0 (parsed: " + std::to_string(iou_threshold_) +
+      ")");
   }
 }
 
@@ -130,6 +143,9 @@ void NonMaximumSuppression::apply(DetectionData & data) const
   }
 
   std::vector<int> nms_result_indices;
+  // Note: NMSBoxes also applies the confidence threshold internally, but filtering beforehand
+  // means we only pass candidates above the threshold, potentially optimizing.
+  // The conf_threshold_ passed here to NMSBoxes is the *same* threshold used for pre-filtering.
   cv::dnn::NMSBoxes(
     candidate_boxes, candidate_scores, conf_threshold_, iou_threshold_, nms_result_indices);
 
@@ -146,15 +162,25 @@ void NonMaximumSuppression::apply(DetectionData & data) const
 
 std::string NonMaximumSuppression::name() const { return "NonMaximumSuppression"; }
 
-RescaleBoxes::RescaleBoxes(
-  const cv::Size & rescaled_image_size, const cv::Size & pre_scaling_image_size)
-: pre_scaling_image_size_(pre_scaling_image_size)
+RescaleBoxes::RescaleBoxes(const PreProcessingMetadata & metadata)
+: pre_scaling_image_size_(metadata.input_shape)  // The target size after inverse scaling
 {
+  // The input to this step is the output of the preprocessing step
+  const cv::Size & rescaled_image_size = metadata.output_shape;
+  // The output of this step should be the input of the preprocessing step
+  const cv::Size & pre_scaling_image_size = metadata.input_shape;
+
   if (rescaled_image_size.width <= 0 || rescaled_image_size.height <= 0) {
-    throw std::invalid_argument("RescaleBoxes: Processed size dimensions must be positive.");
+    throw std::invalid_argument(
+      "RescaleBoxes constructor: Source size (" + std::to_string(rescaled_image_size.width) + "x" +
+      std::to_string(rescaled_image_size.height) + ") from metadata (" + metadata.step_name +
+      ") dimensions must be positive.");
   }
   if (pre_scaling_image_size.width <= 0 || pre_scaling_image_size.height <= 0) {
-    throw std::invalid_argument("RescaleBoxes: Pre-scaling size dimensions must be positive.");
+    throw std::invalid_argument(
+      "RescaleBoxes constructor: Target size (" + std::to_string(pre_scaling_image_size.width) +
+      "x" + std::to_string(pre_scaling_image_size.height) + ") from metadata (" +
+      metadata.step_name + ") dimensions must be positive.");
   }
   scale_x_ = static_cast<double>(pre_scaling_image_size.width) / rescaled_image_size.width;
   scale_y_ = static_cast<double>(pre_scaling_image_size.height) / rescaled_image_size.height;
@@ -183,15 +209,30 @@ void RescaleBoxes::apply(DetectionData & data) const
 
 std::string RescaleBoxes::name() const { return "RescaleBoxes"; }
 
-ShiftBoxes::ShiftBoxes(
-  const cv::Size & padded_size, const cv::Size & pre_padding_size, PaddingType padding_type)
-: padded_size_(padded_size), pre_padding_size_(pre_padding_size), padding_type_(padding_type)
+ShiftBoxes::ShiftBoxes(const PreProcessingMetadata & metadata)
+: padded_size_(metadata.output_shape), pre_padding_size_(metadata.input_shape)
 {
   if (padded_size_.width <= 0 || padded_size_.height <= 0) {
-    throw std::invalid_argument("ShiftBoxes: Padded size dimensions must be positive.");
+    throw std::invalid_argument(
+      "ShiftBoxes constructor: Source size (" + std::to_string(padded_size_.width) + "x" +
+      std::to_string(padded_size_.height) + ") from metadata (" + metadata.step_name +
+      ") dimensions must be positive.");
   }
   if (pre_padding_size_.width <= 0 || pre_padding_size_.height <= 0) {
-    throw std::invalid_argument("ShiftBoxes: Pre-padding size dimensions must be positive.");
+    throw std::invalid_argument(
+      "ShiftBoxes constructor: Target size (" + std::to_string(pre_padding_size_.width) + "x" +
+      std::to_string(pre_padding_size_.height) + ") from metadata (" + metadata.step_name +
+      ") dimensions must be positive.");
+  }
+
+  if (metadata.step_name == "DetectionCenterPadding") {
+    padding_type_ = PaddingType::CENTER;
+  } else if (metadata.step_name == "DetectionBottomRightPadding") {
+    padding_type_ = PaddingType::BOTTOM_RIGHT;
+  } else {
+    throw std::invalid_argument(
+      "ShiftBoxes constructor: Unexpected step name in metadata: '" + metadata.step_name +
+      "'. This constructor should only be called for known padding types.");
   }
 }
 
