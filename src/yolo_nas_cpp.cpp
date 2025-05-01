@@ -1,3 +1,4 @@
+#include <chrono>
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <opencv2/opencv.hpp>
@@ -24,7 +25,19 @@ int main(int argc, char ** argv)
 
   yolo_nas_cpp::DetectionNetwork network(config, model_path, image.size(), false);
 
+  // warmup
+  cv::Mat temp_image(image.size(), CV_8UC3);
+  cv::randu(temp_image, cv::Scalar(0), cv::Scalar(255));
+  for (int i = 0; i < 3; i++) {
+    network.detect(temp_image);
+  }
+
+  std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
   yolo_nas_cpp::DetectionData detections = network.detect(image);
+  std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double, std::milli> duration = end - start;
+  std::cout << "Inference time: " << duration.count() << " ms" << std::endl;
+
   std::cout << "Num detections: " << detections.kept_indices.size() << std::endl;
 
   cv::Mat output_image =
