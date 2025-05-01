@@ -21,8 +21,7 @@ PostProcessing::PostProcessing(
   // 1. Add NMS Step
   try {
     const auto & nms_conf = post_processing_config.at("NMS");
-    post_processing_steps_.push_back(
-      std::make_unique<NonMaximumSuppression>(nms_conf));  // Pass the JSON sub-object
+    post_processing_steps_.push_back(std::make_unique<NonMaximumSuppression>(nms_conf));
     std::cout << "  Added step: " << post_processing_steps_.back()->name() << std::endl;
   } catch (const json::exception & e) {
     throw std::runtime_error(
@@ -63,7 +62,6 @@ PostProcessing::PostProcessing(
         }
       }
     } catch (const std::exception & e) {
-      // Catch exceptions thrown by the factory or step constructors
       throw std::runtime_error(
         "Failed to create inverse step for metadata '" + metadata.step_name + "': " + e.what());
     }
@@ -124,40 +122,9 @@ NonMaximumSuppression::NonMaximumSuppression(const json & params)
 
 void NonMaximumSuppression::apply(DetectionData & data) const
 {
-  // Filter out boxes below confidence threshold first - required by NMSBoxes behavior
-  std::vector<cv::Rect2d> candidate_boxes;
-  std::vector<float> candidate_scores;
-  std::vector<int> candidate_original_indices;
-
-  for (int original_idx : data.kept_indices) {
-    if (data.scores[original_idx] >= conf_threshold_) {
-      candidate_boxes.push_back(data.boxes[original_idx]);
-      candidate_scores.push_back(data.scores[original_idx]);
-      candidate_original_indices.push_back(original_idx);
-    }
-  }
-
-  if (candidate_boxes.empty()) {
-    data.kept_indices.clear();  // No boxes survived confidence thresholding
-    return;
-  }
-
   std::vector<int> nms_result_indices;
-  // Note: NMSBoxes also applies the confidence threshold internally, but filtering beforehand
-  // means we only pass candidates above the threshold, potentially optimizing.
-  // The conf_threshold_ passed here to NMSBoxes is the *same* threshold used for pre-filtering.
-  cv::dnn::NMSBoxes(
-    candidate_boxes, candidate_scores, conf_threshold_, iou_threshold_, nms_result_indices);
-
-  // Update data.kept_indices with the *original* indices of the boxes that survived NMS
-  std::vector<int> final_kept_indices;
-  final_kept_indices.reserve(nms_result_indices.size());
-  for (int nms_idx : nms_result_indices) {
-    if (nms_idx < candidate_original_indices.size()) {  // Bounds check
-      final_kept_indices.push_back(candidate_original_indices[nms_idx]);
-    }
-  }
-  data.kept_indices = std::move(final_kept_indices);
+  cv::dnn::NMSBoxes(data.boxes, data.scores, conf_threshold_, iou_threshold_, nms_result_indices);
+  data.kept_indices = std::move(nms_result_indices);
 }
 
 std::string NonMaximumSuppression::name() const { return "NonMaximumSuppression"; }

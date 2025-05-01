@@ -143,8 +143,7 @@ public:
 private:
   double scale_x_;
   double scale_y_;
-  const cv::Size
-    pre_scaling_image_size_;  // Store the target size (metadata.input_shape) for clamping
+  const cv::Size pre_scaling_image_size_;
 };
 
 /**
