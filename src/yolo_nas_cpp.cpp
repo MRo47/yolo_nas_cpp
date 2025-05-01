@@ -25,7 +25,7 @@ int main(int argc, char ** argv)
 
   yolo_nas_cpp::DetectionNetwork network(config, model_path, image.size(), false);
 
-  // warmup
+  // warmup, to get better benchmark results, usually slow on first few inferences
   cv::Mat temp_image(image.size(), CV_8UC3);
   cv::randu(temp_image, cv::Scalar(0), cv::Scalar(255));
   for (int i = 0; i < 3; i++) {
