@@ -161,16 +161,6 @@ void RescaleBoxes::apply(DetectionData & data) const
     box.y *= scale_y_;
     box.width *= scale_x_;
     box.height *= scale_y_;
-
-    // Optional: Clamp coordinates to original image boundaries
-    box.x = std::max(0.0, box.x);
-    box.y = std::max(0.0, box.y);
-    // Ensure x+width and y+height don't exceed original dimensions
-    box.width = std::min(static_cast<double>(pre_scaling_image_size_.width) - box.x, box.width);
-    box.height = std::min(static_cast<double>(pre_scaling_image_size_.height) - box.y, box.height);
-    // Ensure width/height are not negative if clamping pushes x/y too far
-    box.width = std::max(0.0, box.width);
-    box.height = std::max(0.0, box.height);
   }
 }
 
@@ -198,10 +188,6 @@ void CenterShiftBoxes::apply(DetectionData & data) const
   double pad_width = padded_size_.width - pre_padding_size_.width;
   double pad_height = padded_size_.height - pre_padding_size_.height;
 
-  // Clamp negative padding to zero (shouldn't happen with correct metadata)
-  pad_width = std::max(0.0, pad_width);
-  pad_height = std::max(0.0, pad_height);
-
   // Center padding applies half the total padding to the top/left
   double pad_left = pad_width / 2.0;
   double pad_top = pad_height / 2.0;
@@ -213,16 +199,6 @@ void CenterShiftBoxes::apply(DetectionData & data) const
     // Shift coordinates back by subtracting the top-left padding
     box.x -= pad_left;
     box.y -= pad_top;
-
-    // Clamp coordinates to the boundaries of the PRE-PADDING image size
-    box.x = std::max(0.0, box.x);
-    box.y = std::max(0.0, box.y);
-    // Ensure x+width and y+height don't exceed pre_padding_size dimensions
-    box.width = std::min(static_cast<double>(pre_padding_size_.width) - box.x, box.width);
-    box.height = std::min(static_cast<double>(pre_padding_size_.height) - box.y, box.height);
-    // Ensure width/height are not negative if clamping pushes x/y too far
-    box.width = std::max(0.0, box.width);
-    box.height = std::max(0.0, box.height);
   }
 }
 
@@ -250,10 +226,6 @@ void BottomRightShiftBoxes::apply(DetectionData & data) const
   double pad_width = padded_size_.width - pre_padding_size_.width;
   double pad_height = padded_size_.height - pre_padding_size_.height;
 
-  // Clamp negative padding to zero (shouldn't happen with correct metadata)
-  pad_width = std::max(0.0, pad_width);
-  pad_height = std::max(0.0, pad_height);
-
   double pad_left = 0.0;
   double pad_top = 0.0;
 
@@ -264,16 +236,6 @@ void BottomRightShiftBoxes::apply(DetectionData & data) const
     // Shift coordinates back by subtracting the top-left padding (which is 0,0 here)
     box.x -= pad_left;
     box.y -= pad_top;
-
-    // Clamp coordinates to the boundaries of the PRE-PADDING image size
-    box.x = std::max(0.0, box.x);
-    box.y = std::max(0.0, box.y);
-    // Ensure x+width and y+height don't exceed pre_padding_size dimensions
-    box.width = std::min(static_cast<double>(pre_padding_size_.width) - box.x, box.width);
-    box.height = std::min(static_cast<double>(pre_padding_size_.height) - box.y, box.height);
-    // Ensure width/height are not negative if clamping pushes x/y too far
-    box.width = std::max(0.0, box.width);
-    box.height = std::max(0.0, box.height);
   }
 }
 
