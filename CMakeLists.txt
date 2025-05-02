@@ -39,8 +39,33 @@ set_target_properties(yolo_nas_cpp_exec PROPERTIES
 target_link_libraries(yolo_nas_cpp_exec
     PRIVATE
         yolo_nas_cpp
-        ${OpenCV_LIBS}
+    # No need to explicitly link ${OpenCV_LIBS} here because yolo_nas_cpp links it PUBLICLY
 )
+
+# --- Testing ---
+enable_testing()
+
+include(FetchContent)
+
+FetchContent_Declare(
+    googletest
+    URL https://github.com/google/googletest/archive/refs/tags/release-1.11.0.zip # Use a specific release tag
+)
+
+FetchContent_MakeAvailable(googletest)
+
+add_executable(yolo_nas_cpp_test_post_processing
+    tests/post_processing.cpp
+)
+
+target_link_libraries(yolo_nas_cpp_test_post_processing
+    PRIVATE
+        yolo_nas_cpp
+        gtest_main
+)
+
+add_test(NAME post_processing_tests COMMAND yolo_nas_cpp_test_post_processing)
+# --- End Testing ---
 
 
 # Install rules (excluding models and config)
@@ -63,7 +88,6 @@ install(EXPORT yolo_nas_cppTargets
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/yolo_nas_cpp
 )
 
-# Optional: CMake config for find_package
 include(CMakePackageConfigHelpers)
 
 configure_package_config_file(
@@ -71,7 +95,6 @@ configure_package_config_file(
     "${CMAKE_CURRENT_BINARY_DIR}/yolo_nas_cppConfig.cmake"
     INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/yolo_nas_cpp
 )
-
 
 install(FILES
     "${CMAKE_CURRENT_BINARY_DIR}/yolo_nas_cppConfig.cmake"
