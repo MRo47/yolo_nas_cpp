@@ -15,35 +15,38 @@ PreProcessingStep::create_from_json(
   const std::string & step_name, const json & params, const cv::Size & input_shape)
 {
   std::unique_ptr<PreProcessingStep> step_ptr;
-  cv::Size output_shape = {-1, -1};
+
+  PreProcessingMetadata metadata;
+  metadata.step_name = step_name;
+  metadata.output_shape = {-1, -1};
+  metadata.input_shape = input_shape;
+  metadata.params = params;
 
   // Create the specific step (constructors now may need input_shape)
   if (step_name == "StandardizeImage") {
     step_ptr = std::make_unique<StandardizeImage>(params);
-    output_shape = step_ptr->calculate_output_shape(input_shape);
+    metadata.output_shape = step_ptr->calculate_output_shape(input_shape);
   } else if (step_name == "NormalizeImage") {
     step_ptr = std::make_unique<NormalizeImage>(params);
-    output_shape = step_ptr->calculate_output_shape(input_shape);
+    metadata.output_shape = step_ptr->calculate_output_shape(input_shape);
   } else if (step_name == "DetectionCenterPadding") {
     step_ptr = std::make_unique<DetectionCenterPadding>(params);
-    output_shape = step_ptr->calculate_output_shape(input_shape);
+    metadata.output_shape = step_ptr->calculate_output_shape(input_shape);
   } else if (step_name == "DetectionBottomRightPadding") {
     step_ptr = std::make_unique<DetectionBottomRightPadding>(params);
-    output_shape = step_ptr->calculate_output_shape(input_shape);
+    metadata.output_shape = step_ptr->calculate_output_shape(input_shape);
   } else if (step_name == "ImagePermute") {
     step_ptr = std::make_unique<PassthroughStep>(params);
-    output_shape = step_ptr->calculate_output_shape(input_shape);
+    metadata.output_shape = step_ptr->calculate_output_shape(input_shape);
   } else if (step_name == "DetectionLongestMaxSizeRescale") {
     step_ptr = std::make_unique<DetectionLongestMaxSizeRescale>(params);
-    output_shape = step_ptr->calculate_output_shape(input_shape);
+    metadata.output_shape = step_ptr->calculate_output_shape(input_shape);
   } else if (step_name == "DetectionRescale") {
     step_ptr = std::make_unique<DetectionRescale>(params);
-    output_shape = step_ptr->calculate_output_shape(input_shape);
+    metadata.output_shape = step_ptr->calculate_output_shape(input_shape);
   } else {
     throw std::runtime_error("Unknown pre-processing step type requested: " + step_name);
   }
-
-  PreProcessingMetadata metadata(step_name, input_shape, output_shape, params);
 
   return {std::move(step_ptr), std::move(metadata)};
 }

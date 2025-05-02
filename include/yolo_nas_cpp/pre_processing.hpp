@@ -17,11 +17,6 @@ struct PreProcessingMetadata
   cv::Size input_shape = {-1, -1};
   cv::Size output_shape = {-1, -1};
   json params;
-
-  PreProcessingMetadata(std::string name, cv::Size in_shape, cv::Size out_shape, json p)
-  : step_name(std::move(name)), input_shape(in_shape), output_shape(out_shape), params(std::move(p))
-  {
-  }
 };
 
 // Forward declaration
