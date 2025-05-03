@@ -186,10 +186,9 @@ void NormalizeImage::apply(const cv::Mat & input, cv::Mat & output) const
   } else {
     input_float = input;
   }
-  cv::Mat meanMat = cv::Mat(1, 1, CV_32FC3, cv::Scalar(mean_[0], mean_[1], mean_[2]));
-  cv::Mat stdMat = cv::Mat(1, 1, CV_32FC3, cv::Scalar(std_[0], std_[1], std_[2]));
-  cv::subtract(input_float, meanMat, output);  // output = input_float - mean
-  cv::divide(output, stdMat, output);          // output = output / std
+  cv::subtract(
+    input_float, cv::Scalar(mean_[0], mean_[1], mean_[2]), output);   // output = input_float - mean
+  cv::divide(output, cv::Scalar(std_[0], std_[1], std_[2]), output);  // output = output / std
 }
 
 std::string NormalizeImage::name() const { return "NormalizeImage"; }
@@ -220,26 +219,31 @@ DetectionCenterPadding::DetectionCenterPadding(const json & params)
 
 void DetectionCenterPadding::apply(const cv::Mat & input, cv::Mat & output) const
 {
-  if (input.rows > out_shape_.height || input.cols > out_shape_.width) {
-    std::cerr << "Warning: DetectionCenterPadding input (" << input.cols << "x" << input.rows
-              << ") is larger than target (" << out_shape_.width << "x" << out_shape_.height
-              << "). Output will be cropped/incorrectly padded." << std::endl;
-  }
+  int content_width = std::min(input.cols, out_shape_.width);
+  int content_height = std::min(input.rows, out_shape_.height);
 
-  int pad_height = out_shape_.height - input.rows;
-  int pad_width = out_shape_.width - input.cols;
+  // Calculate the top-left coordinate (x, y) of the Region of Interest (ROI)
+  // within the *input* image. This ROI is the portion of the input image
+  // that will be placed into the center of the output image.
+  // If input is larger than output, this calculates the start of the centered crop.
+  // If input is smaller or equal, this is 0.
+  int roi_x = (input.cols - content_width) / 2;
+  int roi_y = (input.rows - content_height) / 2;
 
-  pad_height = std::max(0, pad_height);
-  pad_width = std::max(0, pad_width);
+  // Create the ROI from the input image. This is the part that is NOT cropped.
+  cv::Mat content_roi = input(cv::Rect(roi_x, roi_y, content_width, content_height));
 
-  int pad_top = pad_height / 2;
-  int pad_bottom = pad_height - pad_top;
-  int pad_left = pad_width / 2;
-  int pad_right = pad_width - pad_left;
+  // Now, calculate the padding needed *around* this 'content_roi' to make it
+  int pad_left = (out_shape_.width - content_width) / 2;
+  int pad_right =
+    (out_shape_.width - content_width) - pad_left;  // Ensures total width difference is handled
+  int pad_top = (out_shape_.height - content_height) / 2;
+  int pad_bottom =
+    (out_shape_.height - content_height) - pad_top;  // Ensures total height difference is handled
 
   cv::copyMakeBorder(
-    input, output, pad_top, pad_bottom, pad_left, pad_right, cv::BORDER_CONSTANT,
-    cv::Scalar::all(pad_value_));
+    content_roi, output, pad_top, pad_bottom, pad_left, pad_right, cv::BORDER_CONSTANT,
+    cv::Scalar::all(static_cast<double>(pad_value_)));
 }
 
 std::string DetectionCenterPadding::name() const { return "DetectionCenterPadding"; }
