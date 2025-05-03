@@ -54,17 +54,18 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(googletest)
 
-add_executable(yolo_nas_cpp_test_post_processing
+add_executable(yolo_nas_cpp_tests
     tests/post_processing.cpp
+    tests/pre_processing.cpp
 )
 
-target_link_libraries(yolo_nas_cpp_test_post_processing
+target_link_libraries(yolo_nas_cpp_tests
     PRIVATE
         yolo_nas_cpp
         gtest_main
 )
 
-add_test(NAME post_processing_tests COMMAND yolo_nas_cpp_test_post_processing)
+add_test(NAME yolo_nas_cpp_all_tests COMMAND yolo_nas_cpp_tests)
 # --- End Testing ---
 
 
