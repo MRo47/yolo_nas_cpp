@@ -274,21 +274,30 @@ DetectionBottomRightPadding::DetectionBottomRightPadding(const json & params)
 
 void DetectionBottomRightPadding::apply(const cv::Mat & input, cv::Mat & output) const
 {
-  if (input.rows > out_shape_.height || input.cols > out_shape_.width) {
-    std::cerr << "Warning: DetectionBottomRightPadding input (" << input.cols << "x" << input.rows
-              << ") is larger than target (" << out_shape_.width << "x" << out_shape_.height
-              << "). Output will be cropped/incorrectly padded." << std::endl;
-  }
+  int content_width = std::min(input.cols, out_shape_.width);
+  int content_height = std::min(input.rows, out_shape_.height);
 
-  int pad_height = out_shape_.height - input.rows;
-  int pad_width = out_shape_.width - input.cols;
+  // For bottom-right alignment, the ROI always starts at (0,0) in the input image.
+  // Cropping effectively happens from the bottom and right sides of the input.
+  int roi_x = 0;
+  int roi_y = 0;
 
-  // Ensure padding is not negative
-  pad_height = std::max(0, pad_height);
-  pad_width = std::max(0, pad_width);
+  // Create the ROI from the input image. This is the portion that is NOT cropped
+  // from the top or left.
+  cv::Mat content_roi = input(cv::Rect(roi_x, roi_y, content_width, content_height));
+
+  // Calculate the padding needed *around* this 'content_roi' to make it
+  // fill the 'out_shape_'.
+  // For bottom-right padding, all padding is on the bottom and right.
+  // These padding values will always be non-negative.
+  int pad_left = 0;
+  int pad_top = 0;
+  int pad_right = out_shape_.width - content_width;     // Will be >= 0
+  int pad_bottom = out_shape_.height - content_height;  // Will be >= 0
 
   cv::copyMakeBorder(
-    input, output, 0, pad_height, 0, pad_width, cv::BORDER_CONSTANT, cv::Scalar::all(pad_value_));
+    content_roi, output, pad_top, pad_bottom, pad_left, pad_right, cv::BORDER_CONSTANT,
+    cv::Scalar::all(static_cast<double>(pad_value_)));  // Cast pad_value to double
 }
 
 std::string DetectionBottomRightPadding::name() const { return "DetectionBottomRightPadding"; }
