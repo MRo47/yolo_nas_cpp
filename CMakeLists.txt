@@ -11,12 +11,11 @@ find_package(OpenCV REQUIRED core imgproc highgui imgcodecs dnn)
 include(FetchContent)
 
 set(SPDLOG_INSTALL ON)
-# set(SPDLOG_HEADER_ONLY ON) # Uncomment for header-only
 
 FetchContent_Declare(
   spdlog
   GIT_REPOSITORY https://github.com/gabime/spdlog.git
-  GIT_TAG        v1.13.0 # Or the latest release tag, or a specific commit hash
+  GIT_TAG        v1.13.0
 )
 
 FetchContent_MakeAvailable(spdlog)
@@ -59,27 +58,34 @@ target_link_libraries(yolo_nas_cpp_exec
 )
 
 # --- Testing ---
-enable_testing()
+# cmake -DENABLE_TESTS=ON ..
+option(ENABLE_TESTS "Enable building and running tests" OFF)
 
-FetchContent_Declare(
-    googletest
-    URL https://github.com/google/googletest/archive/refs/tags/release-1.11.0.zip # Use a specific release tag
-)
+if(ENABLE_TESTS)
+    enable_testing()
 
-FetchContent_MakeAvailable(googletest)
+    FetchContent_Declare(
+        googletest
+        URL https://github.com/google/googletest/archive/refs/tags/release-1.11.0.zip # Use a specific release tag
+    )
 
-add_executable(yolo_nas_cpp_tests
-    tests/post_processing.cpp
-    tests/pre_processing.cpp
-)
+    FetchContent_MakeAvailable(googletest)
 
-target_link_libraries(yolo_nas_cpp_tests
-    PRIVATE
-        yolo_nas_cpp
-        gtest_main
-)
+    add_executable(yolo_nas_cpp_tests
+        tests/post_processing.cpp
+        tests/pre_processing.cpp
+    )
 
-add_test(NAME yolo_nas_cpp_all_tests COMMAND yolo_nas_cpp_tests)
+    target_link_libraries(yolo_nas_cpp_tests
+        PRIVATE
+            yolo_nas_cpp
+            gtest_main
+    )
+
+    add_test(NAME yolo_nas_cpp_all_tests COMMAND yolo_nas_cpp_tests)
+else()
+    message(STATUS "Tests are disabled.")
+endif()
 # --- End Testing ---
 
 
