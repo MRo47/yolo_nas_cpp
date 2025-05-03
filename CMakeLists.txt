@@ -8,6 +8,19 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Find OpenCV 
 find_package(OpenCV REQUIRED core imgproc highgui imgcodecs dnn)
 
+include(FetchContent)
+
+set(SPDLOG_INSTALL ON)
+# set(SPDLOG_HEADER_ONLY ON) # Uncomment for header-only
+
+FetchContent_Declare(
+  spdlog
+  GIT_REPOSITORY https://github.com/gabime/spdlog.git
+  GIT_TAG        v1.13.0 # Or the latest release tag, or a specific commit hash
+)
+
+FetchContent_MakeAvailable(spdlog)
+
 # Define the library
 add_library(yolo_nas_cpp
     src/pre_processing.cpp
@@ -28,6 +41,8 @@ target_link_libraries(yolo_nas_cpp
         ${OpenCV_LIBS}
 )
 
+target_link_libraries(yolo_nas_cpp PRIVATE spdlog::spdlog)
+
 add_executable(yolo_nas_cpp_exec
     src/yolo_nas_cpp.cpp
 )
@@ -39,13 +54,12 @@ set_target_properties(yolo_nas_cpp_exec PROPERTIES
 target_link_libraries(yolo_nas_cpp_exec
     PRIVATE
         yolo_nas_cpp
+        spdlog::spdlog
     # No need to explicitly link ${OpenCV_LIBS} here because yolo_nas_cpp links it PUBLICLY
 )
 
 # --- Testing ---
 enable_testing()
-
-include(FetchContent)
 
 FetchContent_Declare(
     googletest

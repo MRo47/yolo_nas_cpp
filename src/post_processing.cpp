@@ -1,5 +1,7 @@
 #include "yolo_nas_cpp/post_processing.hpp"
 
+#include <spdlog/spdlog.h>
+
 #include <algorithm>
 #include <iostream>
 #include <numeric>
@@ -16,13 +18,13 @@ PostProcessing::PostProcessing(
   const json & post_processing_config,
   const std::vector<PreProcessingMetadata> & pre_processing_metadata)
 {
-  std::cout << "Initializing PostProcessing pipeline..." << std::endl;
+  spdlog::info("Initializing PostProcessing pipeline...");
 
   // 1. Add NMS Step
   try {
     const auto & nms_conf = post_processing_config.at("NMS");
     post_processing_steps_.push_back(std::make_unique<NonMaximumSuppression>(nms_conf));
-    std::cout << "+ Added step: " << post_processing_steps_.back()->name() << std::endl;
+    spdlog::info("+ Added step: {}", post_processing_steps_.back()->name());
   } catch (const json::exception & e) {
     throw std::runtime_error(
       "Failed to find or parse 'NMS' configuration: " + std::string(e.what()));
@@ -32,7 +34,7 @@ PostProcessing::PostProcessing(
   }
 
   // 2. Add Inverse Preprocessing Steps (in reverse order with size tracking)
-  std::cout << "Adding inverse geometric transformations..." << std::endl;
+  spdlog::info("Adding inverse geometric transformations...");
 
   // Iterate backwards through the preprocessing metadata
   for (auto it = pre_processing_metadata.rbegin(); it != pre_processing_metadata.rend(); ++it) {
@@ -45,16 +47,17 @@ PostProcessing::PostProcessing(
 
       if (inverse_step) {
         post_processing_steps_.push_back(std::move(inverse_step));
-        std::cout << "+ Added step: " << post_processing_steps_.back()->name() << std::endl;
+        spdlog::info("+ Added step: {}", post_processing_steps_.back()->name());
       } else {
         // The factory returns nullptr if the step name is not a known inverse geometric type
-        std::cout << "  Skipping non-geometric/non-inverse step: " << metadata.step_name
-                  << std::endl;
+        spdlog::info("Skipping non-geometric/non-inverse step: {}", metadata.step_name);
         if (metadata.output_shape != metadata.input_shape) {
-          std::cerr << "Warning: Preprocessing step '" << metadata.step_name
-                    << "' changed shape from " << metadata.input_shape << " to "
-                    << metadata.output_shape << ", but no inverse geometric step was created."
-                    << std::endl;
+          spdlog::warn(
+            "Preprocessing step '{}' changed shape from {}x{} to {}x{}, but no inverse geometric "
+            "step "
+            "was created.",
+            metadata.step_name, metadata.input_shape.width, metadata.input_shape.height,
+            metadata.output_shape.width, metadata.output_shape.height);
         }
       }
     } catch (const std::exception & e) {

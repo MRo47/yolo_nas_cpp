@@ -1,7 +1,8 @@
 #include "yolo_nas_cpp/network.hpp"
 
+#include <spdlog/spdlog.h>
+
 #include <algorithm>
-#include <iostream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -18,10 +19,10 @@ DetectionNetwork::DetectionNetwork(
   const json & config, const std::string & onnx_model_path, const cv::Size & input_image_shape,
   bool use_cuda)
 {
-  std::cout << "Initializing Detection Network..." << std::endl;
+  spdlog::info("Initializing Detection Network...");
   try {
     parse_config(config, input_image_shape);
-    std::cout << "Configuration parsed and pipelines initialized." << std::endl;
+    spdlog::info("Configuration parsed and pipelines initialized.");
   } catch (const std::exception & e) {
     throw std::runtime_error("Failed to parse network configuration: " + std::string(e.what()));
   }
@@ -32,17 +33,17 @@ DetectionNetwork::DetectionNetwork(
       throw std::runtime_error(
         "Network loaded from ONNX is empty. Check model path: " + onnx_model_path);
     }
-    std::cout << "ONNX model loaded successfully from: " << onnx_model_path << std::endl;
+    spdlog::info("ONNX model loaded successfully from: {}", onnx_model_path);
 
     if (use_cuda && cv::cuda::getCudaEnabledDeviceCount() > 0) {
-      std::cout << "Attempting to use CUDA" << std::endl;
+      spdlog::info("Attempting to use CUDA");
       net_.setPreferableBackend(cv::dnn::DNN_BACKEND_CUDA);
       net_.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA);
-      std::cout << "Inference backend set to CUDA" << std::endl;
+      spdlog::info("Inference backend set to CUDA");
     } else {
       net_.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
       net_.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
-      std::cout << "Inference backend set to CPU" << std::endl;
+      spdlog::info("Inference backend set to CPU");
     }
 
     output_layer_names_ = net_.getUnconnectedOutLayersNames();
@@ -58,7 +59,7 @@ DetectionNetwork::DetectionNetwork(
     throw std::runtime_error(
       "Error loading ONNX model '" + onnx_model_path + "': " + std::string(e.what()));
   }
-  std::cout << "Detection Network initialized." << std::endl;
+  spdlog::info("Detection Network initialized.");
 }
 
 void DetectionNetwork::parse_config(const json & config, const cv::Size & input_image_shape)
@@ -144,18 +145,24 @@ void DetectionNetwork::parse_network_output(
     // Check for Score Tensor (1 x N x num_classes)
     if (output.dims == 3 && output.size[0] == 1 && output.size[2] == expected_num_classes) {
       if (score_tensor_ptr != nullptr) {
-        std::cerr << "Warning: Found multiple potential score tensors. Using the last one found."
-                  << std::endl;
+        spdlog::warn(
+          "Found multiple potential score tensors. Using the last one found. Size: {}x{}x{}",
+          output.size[0], output.size[1], output.size[2]);
       }
       score_tensor_ptr = &output;
     }
     // Check for Box Tensor (1 x N x 4)
     else if (output.dims == 3 && output.size[0] == 1 && output.size[2] == 4) {
       if (box_tensor_ptr != nullptr) {
-        std::cerr << "Warning: Found multiple potential box tensors. Using the last one found."
-                  << std::endl;
+        spdlog::warn(
+          "Found multiple potential box tensors. Using the last one found. Size: {}x{}x{}",
+          output.size[0], output.size[1], output.size[2]);
       }
       box_tensor_ptr = &output;
+    } else {
+      spdlog::debug(
+        "Skipping output tensor with unexpected shape: {}x{}x{}", output.size[0], output.size[1],
+        output.size[2]);
     }
   }
 
@@ -176,7 +183,7 @@ void DetectionNetwork::parse_network_output(
 
   const int num_detections = num_detections_scores;
   if (num_detections == 0) {
-    std::cerr << "Warning: Output tensors indicate zero detections." << std::endl;
+    spdlog::warn("Output tensors indicate zero detections.");
     boxes.clear();
     scores.clear();
     class_ids.clear();

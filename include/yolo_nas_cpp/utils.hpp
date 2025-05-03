@@ -1,8 +1,11 @@
 #pragma once
 
+#include <spdlog/spdlog.h>
+
 #include <nlohmann/json.hpp>
 #include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>
+#include <opencv2/imgproc.hpp>
 
 #include "yolo_nas_cpp/detection_data.hpp"
 
@@ -44,9 +47,7 @@ inline cv::Mat draw_detections(
 
   // Ensure labels are available if there are detections to draw
   if (!detections.kept_indices.empty() && labels.empty()) {
-    std::cerr
-      << "Warning: Detections exist but no labels provided. Class names will be unavailable."
-      << std::endl;
+    spdlog::warn("Detections exist but no labels provided. Class names will be unavailable.");
   }
 
   for (int idx : detections.kept_indices) {
@@ -56,7 +57,7 @@ inline cv::Mat draw_detections(
       idx < 0 || static_cast<size_t>(idx) >= detections.boxes.size() ||
       static_cast<size_t>(idx) >= detections.scores.size() ||
       static_cast<size_t>(idx) >= detections.class_ids.size()) {
-      std::cerr << "Warning: Skipping invalid kept_index: " << idx << std::endl;
+      spdlog::warn("Skipping invalid kept_index: {}", idx);
       continue;
     }
 
@@ -79,8 +80,9 @@ inline cv::Mat draw_detections(
       if (class_id >= 0 && static_cast<size_t>(class_id) < labels.size()) {
         class_name = labels[class_id];
       } else {
-        std::cerr << "Warning: Invalid class_id " << class_id << " encountered for index " << idx
-                  << ". Max label index: " << labels.size() - 1 << std::endl;
+        spdlog::warn(
+          "Invalid class_id {} encountered for index {}. Max label index: {}", class_id, idx,
+          labels.size() - 1);
         class_name = "ID:" + std::to_string(class_id);  // Fallback
       }
     }
@@ -101,8 +103,7 @@ inline cv::Mat draw_detections(
 
     // Only draw if the box has a valid area after clamping
     if (box.width <= 0 || box.height <= 0) {
-      std::cerr << "Warning: Skipping box with non-positive dimensions after clamping for index "
-                << idx << std::endl;
+      spdlog::warn("Skipping box with non-positive dimensions after clamping for index {}", idx);
       continue;
     }
 

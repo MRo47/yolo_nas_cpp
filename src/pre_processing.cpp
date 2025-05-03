@@ -1,7 +1,8 @@
 #include "yolo_nas_cpp/pre_processing.hpp"
 
+#include <spdlog/spdlog.h>
+
 #include <algorithm>
-#include <iostream>
 #include <stdexcept>
 #include <string>
 
@@ -57,7 +58,7 @@ PreProcessing::PreProcessing(const json & config, const cv::Size input_shape)
     throw std::runtime_error("Expected 'pre_processing' config to be a JSON array.");
   }
 
-  std::cout << "Initializing PreProcessing pipeline..." << std::endl;
+  spdlog::info("Initializing PreProcessing pipeline...");
 
   cv::Size current_shape = input_shape;
 
@@ -81,11 +82,10 @@ PreProcessing::PreProcessing(const json & config, const cv::Size input_shape)
 
       current_shape = metadata_.back().output_shape;
 
-      std::cout << "+ Added step: " << step_name
-                << " (Input: " << metadata_.back().input_shape.width << "x"
-                << metadata_.back().input_shape.height
-                << ", Output: " << metadata_.back().output_shape.width << "x"
-                << metadata_.back().output_shape.height << ")" << std::endl;
+      spdlog::info(
+        "+ Added step: {} (Input: {}x{}, Output: {}x{})", step_name,
+        metadata_.back().input_shape.width, metadata_.back().input_shape.height,
+        metadata_.back().output_shape.width, metadata_.back().output_shape.height);
 
     } catch (const std::exception & e) {
       throw std::runtime_error(
@@ -94,8 +94,7 @@ PreProcessing::PreProcessing(const json & config, const cv::Size input_shape)
   }
 
   if (processing_steps_.empty()) {
-    std::cerr << "Warning: Pre-processing configuration was empty or resulted in no steps."
-              << std::endl;
+    spdlog::warn("Pre-processing configuration was empty or resulted in no steps.");
   }
 }
 
@@ -375,7 +374,7 @@ std::string DetectionLongestMaxSizeRescale::name() const
 cv::Size DetectionLongestMaxSizeRescale::calculate_output_shape(const cv::Size & input_shape) const
 {
   if (input_shape.width <= 0 || input_shape.height <= 0) {
-    std::cerr << "Warning: DetectionLongestMaxSizeRescale input shape is unknown." << std::endl;
+    spdlog::warn("DetectionLongestMaxSizeRescale input shape is unknown.");
     return {-1, -1};
   }
 
