@@ -57,6 +57,8 @@ PreProcessing::PreProcessing(const json & config, const cv::Size input_shape)
     throw std::runtime_error("Expected 'pre_processing' config to be a JSON array.");
   }
 
+  std::cout << "Initializing PreProcessing pipeline..." << std::endl;
+
   cv::Size current_shape = input_shape;
 
   for (const auto & step_config : config) {
@@ -79,7 +81,7 @@ PreProcessing::PreProcessing(const json & config, const cv::Size input_shape)
 
       current_shape = metadata_.back().output_shape;
 
-      std::cout << "Successfully added preprocessing step: " << step_name
+      std::cout << "+ Added step: " << step_name
                 << " (Input: " << metadata_.back().input_shape.width << "x"
                 << metadata_.back().input_shape.height
                 << ", Output: " << metadata_.back().output_shape.width << "x"

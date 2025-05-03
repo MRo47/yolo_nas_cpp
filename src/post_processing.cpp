@@ -22,7 +22,7 @@ PostProcessing::PostProcessing(
   try {
     const auto & nms_conf = post_processing_config.at("NMS");
     post_processing_steps_.push_back(std::make_unique<NonMaximumSuppression>(nms_conf));
-    std::cout << "  Added step: " << post_processing_steps_.back()->name() << std::endl;
+    std::cout << "+ Added step: " << post_processing_steps_.back()->name() << std::endl;
   } catch (const json::exception & e) {
     throw std::runtime_error(
       "Failed to find or parse 'NMS' configuration: " + std::string(e.what()));
@@ -32,15 +32,11 @@ PostProcessing::PostProcessing(
   }
 
   // 2. Add Inverse Preprocessing Steps (in reverse order with size tracking)
-  std::cout << "  Adding inverse geometric transformations..." << std::endl;
+  std::cout << "Adding inverse geometric transformations..." << std::endl;
 
   // Iterate backwards through the preprocessing metadata
   for (auto it = pre_processing_metadata.rbegin(); it != pre_processing_metadata.rend(); ++it) {
     const auto & metadata = *it;
-
-    std::cout << "    Processing PreStep: " << metadata.step_name
-              << " (Input: " << metadata.input_shape << ", Output: " << metadata.output_shape << ")"
-              << std::endl;
 
     try {
       // Use the factory method to create the inverse step
@@ -49,10 +45,10 @@ PostProcessing::PostProcessing(
 
       if (inverse_step) {
         post_processing_steps_.push_back(std::move(inverse_step));
-        std::cout << "    Added step: " << post_processing_steps_.back()->name() << std::endl;
+        std::cout << "+ Added step: " << post_processing_steps_.back()->name() << std::endl;
       } else {
         // The factory returns nullptr if the step name is not a known inverse geometric type
-        std::cout << "    Skipping non-geometric/non-inverse step: " << metadata.step_name
+        std::cout << "  Skipping non-geometric/non-inverse step: " << metadata.step_name
                   << std::endl;
         if (metadata.output_shape != metadata.input_shape) {
           std::cerr << "Warning: Preprocessing step '" << metadata.step_name
@@ -66,8 +62,6 @@ PostProcessing::PostProcessing(
         "Failed to create inverse step for metadata '" + metadata.step_name + "': " + e.what());
     }
   }
-  std::cout << "PostProcessing pipeline initialization complete. Total steps: "
-            << post_processing_steps_.size() << std::endl;
 }
 
 void PostProcessing::run(DetectionData & data, const cv::Size & /*original_image_size*/)
