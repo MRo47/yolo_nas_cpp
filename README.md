@@ -1,9 +1,11 @@
 # yolo_nas_cpp
-High-Performance YOLO-NAS Inference in C++ using OpenCV DNN.
+High-Performance YOLO-NAS Inference library in C++ using OpenCV DNN.
 
 ![Detections on a photo by Brett Sayles from Pexels: https://www.pexels.com/photo/women-walking-on-side-street-1119078/](images/detections.png "Detected objects on a street photo by Brett Sayles")
 
 `yolo_nas_cpp` is a C++ library designed for efficient inference of [YOLO-NAS](https://github.com/Deci-AI/super-gradients/blob/master/YOLONAS.md) (YOLO-Neural Architecture Search) models exported to the ONNX format. It leverages OpenCV's DNN module for executing the network and provides a flexible pipeline architecture for pre- and post-processing steps, configured via a JSON file.
+
+![YOLO-NAS Performance](https://github.com/Deci-AI/super-gradients/blob/e0ccacf8868ffa1296fa4f8407c03d2bc227312c/documentation/source/images/yolo_nas_frontier.png "YOLO-NAS performance comparison chart from Deci.ai")
 
 ## Features
 
@@ -81,7 +83,6 @@ An example executable `yolo_nas_cpp` is built as part of the project. You can us
     ```bash
     ./yolo_nas_cpp <path/to/your/model.onnx> <path/to/your/metadata.json> <path/to/your/image.jpg>
     ```
-    Replace the placeholder paths with the actual paths to your exported files and the image you want to process. The output will display the image with bounding boxes and labels.
 
 ## Running Tests
 
@@ -105,7 +106,7 @@ This library provides CMake targets, allowing easy integration into your own CMa
 Here's a minimal example of how to integrate `yolo_nas_cpp` into your `CMakeLists.txt`:
 
 ```cmake
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.14)
 project(your_project)
 
 # Find dependencies (adjust paths/methods as needed for your system)
