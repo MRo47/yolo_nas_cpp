@@ -136,7 +136,7 @@ target_link_libraries(your_detection_app PRIVATE yolo_nas_cpp::yolo_nas_cpp)
 
 - Sysetm: Docker running on Fedora 41
 - CPU: Intel® Core™ Ultra 9 185H × 22
-- Image size: 1920x1080
+- Image size: 1920x1280
 
 | Model | GPU (FPS) | CPU (FPS) |
 | --- | --- | --- |
