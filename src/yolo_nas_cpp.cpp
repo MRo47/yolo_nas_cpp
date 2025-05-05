@@ -4,6 +4,7 @@
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <opencv2/opencv.hpp>
+#include <opencv2/videoio.hpp>
 #include <string>
 
 #include "yolo_nas_cpp/network.hpp"
@@ -12,48 +13,153 @@
 int main(int argc, char ** argv)
 {
   if (argc < 4) {
-    spdlog::error("Usage: {} <model_path> <metadata_path> <image_path>", argv[0]);
+    spdlog::error("Usage: {} <model_path> <metadata_path> <image_or_video_path>", argv[0]);
     return 1;
   }
   std::string model_path = argv[1];
   std::string metadata_path = argv[2];
-  std::string image_path = argv[3];
+  std::string input_path = argv[3];  // Can be image or video
 
   std::ifstream file(metadata_path);
+  if (!file.is_open()) {
+    spdlog::error("Could not open metadata file: {}", metadata_path);
+    return 1;
+  }
   nlohmann::json config;
-  file >> config;
-
-  cv::Mat image = cv::imread(image_path);
-  if (image.empty()) {
-    spdlog::error("Could not read image from path: {}", image_path);
+  try {
+    file >> config;
+  } catch (const nlohmann::json::exception & e) {
+    spdlog::error("Failed to parse metadata JSON {}: {}", metadata_path, e.what());
     return 1;
   }
 
-  yolo_nas_cpp::DetectionNetwork network(config, model_path, image.size(), false);
+  // Try opening as an image first
+  cv::Mat image = cv::imread(input_path);
 
-  // warmup, to get better benchmark results, usually slow on first few inferences
-  cv::Mat temp_image(image.size(), CV_8UC3);
-  cv::randu(temp_image, cv::Scalar(0), cv::Scalar(255));
-  spdlog::info("Starting network warmup...");
-  for (int i = 0; i < 3; i++) {
-    network.detect(temp_image);
+  if (!image.empty()) {  // Successfully read as an image
+    spdlog::info("Processing input as an image: {}", input_path);
+
+    // Initialize network for image
+    yolo_nas_cpp::DetectionNetwork network(config, model_path, image.size(), false);
+
+    // Warmup
+    cv::Mat temp_image(image.size(), CV_8UC3);
+    cv::randu(temp_image, cv::Scalar(0), cv::Scalar(255));
+    spdlog::info("Starting network warmup (image mode)...");
+    for (int i = 0; i < 3; i++) {
+      network.detect(temp_image);
+    }
+    spdlog::info("Warmup finished.");
+
+    std::chrono::high_resolution_clock::time_point start =
+      std::chrono::high_resolution_clock::now();
+    yolo_nas_cpp::DetectionData detections = network.detect(image);
+    std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::milli> duration = end - start;
+    spdlog::info("Inference time: {} ms", duration.count());
+    spdlog::info("Num detections: {}", detections.kept_indices.size());
+
+    cv::Mat output_image =
+      yolo_nas_cpp::draw_detections(image, detections, network.get_class_labels());
+    cv::namedWindow("Detections", cv::WINDOW_NORMAL);
+    cv::imshow("Detections", output_image);
+    spdlog::info("Press any key to exit.");
+    cv::waitKey(0);
+
+  } else {  // Could not read as an image, try as video or camera
+    cv::VideoCapture cap;
+    bool is_camera = false;
+
+    // Try opening as a file path
+    cap.open(input_path);
+
+    if (!cap.isOpened()) {
+      // If opening as file path failed, try converting to integer for camera index
+      try {
+        int camera_index = std::stoi(input_path);
+        cap.open(camera_index);
+        if (cap.isOpened()) {
+          is_camera = true;
+          spdlog::info("Processing input as camera with index: {}", camera_index);
+        } else {
+          spdlog::error(
+            "Input path '{}' is not a valid image file, video file, or camera index.", input_path);
+          return 1;
+        }
+      } catch (const std::invalid_argument &) {
+        spdlog::error(
+          "Input path '{}' is not a valid image file, video file, or camera index.", input_path);
+        return 1;
+      } catch (const std::out_of_range &) {
+        spdlog::error("Input path '{}' is out of range for a camera index.", input_path);
+        return 1;
+      }
+    } else {
+      spdlog::info("Processing input as a video file: {}", input_path);
+    }
+
+    // Read the first frame to get dimensions for network initialization
+    cv::Mat frame;
+    cap >> frame;
+    if (frame.empty()) {
+      spdlog::error("Could not read first frame from video/camera.");
+      return 1;
+    }
+
+    // Initialize network for video
+    // Assuming false for use_cuda based on original example, user can change this
+    yolo_nas_cpp::DetectionNetwork network(config, model_path, frame.size(), false);
+
+    cv::namedWindow("Detections", cv::WINDOW_NORMAL);
+
+    spdlog::info("Starting video processing. Press 'q' to quit.");
+
+    double total_inference_ms = 0;
+    int frame_count = 0;
+    std::chrono::high_resolution_clock::time_point frame_start_time;
+
+    // Video processing loop
+    while (true) {
+      frame_start_time = std::chrono::high_resolution_clock::now();
+
+      cap >> frame;
+      if (frame.empty()) {
+        break;  // End of video stream
+      }
+
+      yolo_nas_cpp::DetectionData detections = network.detect(frame);
+
+      cv::Mat output_frame =
+        yolo_nas_cpp::draw_detections(frame, detections, network.get_class_labels());
+
+      auto frame_end_time = std::chrono::high_resolution_clock::now();
+      std::chrono::duration<double, std::milli> frame_duration = frame_end_time - frame_start_time;
+      double fps = 1000.0 / frame_duration.count();
+      spdlog::info(
+        "Frame {}: FPS = {:.2f}, Detections = {}", frame_count, fps,
+        detections.kept_indices.size());
+
+      cv::imshow("Detections", output_frame);
+
+      frame_count++;
+      total_inference_ms += frame_duration.count();
+
+      if (cv::waitKey(1) == 'q') {
+        spdlog::info("Quitting video processing.");
+        break;
+      }
+    }
+
+    if (frame_count > 0) {
+      double average_fps = static_cast<double>(frame_count) / (total_inference_ms / 1000.0);
+      spdlog::info("Average FPS over {} frames: {:.2f}", frame_count, average_fps);
+    } else {
+      spdlog::warn("No frames were processed from the video stream.");
+    }
+
+    cap.release();
+    cv::destroyAllWindows();
   }
-  spdlog::info("Warmup finished.");
-
-  std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
-  yolo_nas_cpp::DetectionData detections = network.detect(image);
-  std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
-  std::chrono::duration<double, std::milli> duration = end - start;
-  spdlog::info("Inference time: {} ms", duration.count());
-
-  spdlog::info("Num detections: {}", detections.kept_indices.size());
-
-  cv::Mat output_image =
-    yolo_nas_cpp::draw_detections(image, detections, network.get_class_labels());
-
-  cv::namedWindow("Detections", cv::WINDOW_NORMAL);
-  cv::imshow("Detections", output_image);
-  cv::waitKey(0);
 
   return 0;
 }
