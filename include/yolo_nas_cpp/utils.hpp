@@ -30,6 +30,7 @@ inline cv::Size parse_cv_size(const json & shape_arr)
  * @param detections A struct containing detection data (boxes, scores, class_ids, kept_indices).
  * @param labels A vector of strings where the index corresponds to the class_id.
  * @param box_color Color for the bounding box. Default is blue.
+ * @param alpha Opacity for the bounding box. Default is 0.15.
  * @param text_color Color for the text label. Default is white.
  * @param thickness Thickness for the bounding box lines and text. Default is 2.
  * @param font_scale Font scale for the text label. Default is 0.6.
@@ -38,7 +39,7 @@ inline cv::Size parse_cv_size(const json & shape_arr)
  */
 inline cv::Mat draw_detections(
   const cv::Mat & image, const DetectionData & detections, const std::vector<std::string> & labels,
-  const cv::Scalar & box_color = cv::Scalar(255, 178, 50),
+  const cv::Scalar & box_color = cv::Scalar(255, 178, 50), double alpha = 0.15,
   const cv::Scalar & text_color = cv::Scalar(255, 255, 255), int thickness = 2,
   double font_scale = 0.6, int font_face = cv::FONT_HERSHEY_SIMPLEX)
 {
@@ -96,7 +97,11 @@ inline cv::Mat draw_detections(
       continue;
     }
 
+    // draw box with transparency
     cv::rectangle(output_image, box, box_color, thickness);
+    cv::Mat roi = output_image(box);
+    cv::Mat color(roi.size(), roi.type(), box_color);
+    cv::addWeighted(color, alpha, roi, 1.0 - alpha, 0.0, roi);
 
     // 5. Prepare and Draw Text Label with Background
     int baseline = 0;
