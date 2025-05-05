@@ -3,11 +3,16 @@ import super_gradients.training.processing as processing
 import numpy as np
 import json
 import argparse
+import os
 
-def export_onnx(model, model_type, input_shape=(1, 3, 640, 640), opset_version=11):
+def export_onnx(model, model_type, output_path=None, input_shape=(1, 3, 640, 640), opset_version=11):
+    out_path = f"{model_type}.onnx"
+    if output_path:
+        out_path = os.path.join(output_path, out_path)
+
     model.eval()
     model.prep_model_for_conversion(input_size=input_shape)
-    model.export(f"{model_type}.onnx", postprocessing=None, preprocessing=None,
+    model.export(out_path, postprocessing=None, preprocessing=None,
                 onnx_export_kwargs={"opset_version":opset_version})
     
 
@@ -101,6 +106,8 @@ if __name__ == "__main__":
                         help="ONNX opset version (default=11), "
                         "this is required in order to use onnxruntime compiled with OpenCV 4.6.0, "
                         "not the same as onnxruntime version")
+    parser.add_argument("--output_path", type=str, default=None, help="Output directory to export ONNX file, "
+                        "will be exported to CWD if not specified")
     args = parser.parse_args()
 
     main(args.model_type, args.opset_version)
