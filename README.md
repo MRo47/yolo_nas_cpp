@@ -82,6 +82,7 @@ An example executable `yolo_nas_cpp` is built as part of the project. You can us
 3.  **Run the example executable:**
     ```bash
     ./yolo_nas_cpp <path/to/your/model.onnx> <path/to/your/metadata.json> <path/to/your/image.jpg | path/to/your/video.mp4 | webcam_index>
+    # use --cuda as 4th argument if you want to use cuda
     ```
 
 ## Running Tests
