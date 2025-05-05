@@ -2,8 +2,6 @@
 High-Performance YOLO-NAS Inference in C++ using OpenCV DNN.
 
 ![Detections on a photo by Brett Sayles from Pexels: https://www.pexels.com/photo/women-walking-on-side-street-1119078/](images/detections.png "Detected objects on a street photo by Brett Sayles")
-<center>Inference from YOLO-NAS small model</center>
-
 
 `yolo_nas_cpp` is a C++ library designed for efficient inference of [YOLO-NAS](https://github.com/Deci-AI/super-gradients/blob/master/YOLONAS.md) (YOLO-Neural Architecture Search) models exported to the ONNX format. It leverages OpenCV's DNN module for executing the network and provides a flexible pipeline architecture for pre- and post-processing steps, configured via a JSON file.
 
