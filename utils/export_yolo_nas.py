@@ -2,6 +2,7 @@ from super_gradients.training import models
 import super_gradients.training.processing as processing
 import numpy as np
 import json
+import argparse
 
 def export_onnx(model, model_type, input_shape=(1, 3, 640, 640), opset_version=11):
     model.eval()
@@ -56,7 +57,7 @@ def get_preprocessing_steps(preprocessing):
     else:
         raise NotImplemented("Model have processing steps that haven't been implemented")
 
-def export_metadata(model, model_type):
+def export_metadata_get_input_shape(model, model_type) -> tuple:
     preprocessing_steps = [
         get_preprocessing_steps(st) for st in model._image_processor.processings
     ]
@@ -85,9 +86,21 @@ def export_metadata(model, model_type):
     filename = f"{model_type}-metadata.json"
     with open(filename, "w") as f:
         f.write(json.dumps(res))
+    return input_shape
+
+def main(model_type, opset_version):
+    model = models.get(model_type, pretrained_weights="coco")
+    input_shape = export_metadata_get_input_shape(model, model_type)
+    export_onnx(model, model_type, input_shape=input_shape, opset_version=opset_version)
 
 if __name__ == "__main__":
-    model_type = "yolo_nas_s"
-    model = models.get(model_type, pretrained_weights="coco")
-    export_metadata(model, model_type)
-    export_onnx(model, model_type)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model_type", type=str, required=True, choices=["yolo_nas_s", "yolo_nas_m", "yolo_nas_l"],
+                        help="Model type (small, medium, large)")
+    parser.add_argument("--opset_version", type=int, default=11,
+                        help="ONNX opset version (default=11), "
+                        "this is required in order to use onnxruntime compiled with OpenCV 4.6.0, "
+                        "not the same as onnxruntime version")
+    args = parser.parse_args()
+
+    main(args.model_type, args.opset_version)
