@@ -79,7 +79,11 @@ An example executable `yolo_nas_cpp` is built as part of the project. You can us
 
 1.  **Build the library** as described in the previous section.
 2.  **Export your YOLO-NAS model and metadata** using the `export_yolo_nas.py` script.
-3.  **Run the example executable:**
+3.  **Optionally pull the model weights** using git lfs.
+    ```bash
+    git lfs pull
+    ```
+4.  **Run the example executable:**
     ```bash
     ./yolo_nas_cpp <path/to/your/model.onnx> <path/to/your/metadata.json> <path/to/your/image.jpg | path/to/your/video.mp4 | webcam_index>
     # use --cuda as 4th argument if you want to use cuda
