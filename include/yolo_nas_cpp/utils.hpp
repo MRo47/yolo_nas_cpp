@@ -29,7 +29,6 @@ inline cv::Size parse_cv_size(const json & shape_arr)
  * @param image The input image on which to draw detections.
  * @param detections A struct containing detection data (boxes, scores, class_ids, kept_indices).
  * @param labels A vector of strings where the index corresponds to the class_id.
- * @param score_threshold Optional minimum score threshold to draw a detection. Default 0.0 (draw all kept).
  * @param box_color Color for the bounding box. Default is blue.
  * @param text_color Color for the text label. Default is white.
  * @param thickness Thickness for the bounding box lines and text. Default is 2.
@@ -39,7 +38,7 @@ inline cv::Size parse_cv_size(const json & shape_arr)
  */
 inline cv::Mat draw_detections(
   const cv::Mat & image, const DetectionData & detections, const std::vector<std::string> & labels,
-  float score_threshold = 0.0f, const cv::Scalar & box_color = cv::Scalar(255, 178, 50),
+  const cv::Scalar & box_color = cv::Scalar(255, 178, 50),
   const cv::Scalar & text_color = cv::Scalar(255, 255, 255), int thickness = 2,
   double font_scale = 0.6, int font_face = cv::FONT_HERSHEY_SIMPLEX)
 {
@@ -63,15 +62,8 @@ inline cv::Mat draw_detections(
 
     float score = detections.scores[idx];
 
-    // Skip if score is below the threshold
-    if (score < score_threshold) {
-      continue;
-    }
-
     const cv::Rect2d & box_double = detections.boxes[idx];
     int class_id = detections.class_ids[idx];
-
-    // Convert Rect2d to Rect for drawing functions that prefer integers
     cv::Rect box(box_double.x, box_double.y, box_double.width, box_double.height);
 
     // 2. Get Class Name
@@ -94,14 +86,11 @@ inline cv::Mat draw_detections(
 
     // 4. Draw Bounding Box
     // Make sure the box coordinates are within image bounds (optional but safer)
-    // Clamp top-left corner
     box.x = std::max(0, box.x);
     box.y = std::max(0, box.y);
-    // Clamp bottom-right corner implicitly by adjusting width/height
     box.width = std::min(box.width, output_image.cols - box.x);
     box.height = std::min(box.height, output_image.rows - box.y);
 
-    // Only draw if the box has a valid area after clamping
     if (box.width <= 0 || box.height <= 0) {
       spdlog::warn("Skipping box with non-positive dimensions after clamping for index {}", idx);
       continue;
@@ -116,20 +105,16 @@ inline cv::Mat draw_detections(
 
     // Calculate position for the text label
     cv::Point text_origin = cv::Point(box.x, box.y - thickness);
-    // If the text would go off the top screen edge, place it inside the box instead
     if (text_origin.y < text_size.height) {
-      text_origin.y = box.y + text_size.height + thickness;  // Move inside, below top line
+      text_origin.y = box.y + text_size.height + thickness;
     }
 
-    // Ensure text origin doesn't go beyond image bottom
+    // Ensure text origin is within image bounds
     text_origin.y = std::min(output_image.rows - baseline, text_origin.y);
-    // Ensure text origin doesn't go beyond image right edge
     text_origin.x = std::min(output_image.cols - text_size.width, text_origin.x);
 
     // Calculate background rectangle position based on final text_origin
-    // Top-left corner of the background rectangle
     cv::Point bg_rect_tl(box.x, text_origin.y - text_size.height - thickness);
-    // Bottom-right corner of the background rectangle
     cv::Point bg_rect_br(box.x + text_size.width, text_origin.y + baseline - thickness);
 
     // Clamp background rectangle coordinates to be within image bounds
@@ -138,13 +123,7 @@ inline cv::Mat draw_detections(
     bg_rect_br.x = std::min(output_image.cols, bg_rect_br.x);
     bg_rect_br.y = std::min(output_image.rows, bg_rect_br.y);
 
-    // Draw the filled background rectangle
-    // Check if the background rectangle has valid dimensions before drawing
-    if (bg_rect_br.x > bg_rect_tl.x && bg_rect_br.y > bg_rect_tl.y) {
-      cv::rectangle(output_image, bg_rect_tl, bg_rect_br, box_color, cv::FILLED);
-    }
-
-    // Draw the text itself
+    cv::rectangle(output_image, bg_rect_tl, bg_rect_br, box_color, cv::FILLED);
     cv::putText(
       output_image, display_text, text_origin, font_face, font_scale, text_color, thickness,
       cv::LINE_AA);
