@@ -6,13 +6,14 @@ import argparse
 import os
 
 def export_onnx(model, model_type, output_path=None, input_shape=(1, 3, 640, 640), opset_version=11):
-    out_path = f"{model_type}.onnx"
+    out_file = f"{model_type}.onnx"
     if output_path:
-        out_path = os.path.join(output_path, out_path)
+        os.makedirs(output_path, exist_ok=True)
+        out_file = os.path.join(output_path, out_file)
 
     model.eval()
     model.prep_model_for_conversion(input_size=input_shape)
-    model.export(out_path, postprocessing=None, preprocessing=None,
+    model.export(out_file, postprocessing=None, preprocessing=None,
                 onnx_export_kwargs={"opset_version":opset_version})
     
 
@@ -62,7 +63,12 @@ def get_preprocessing_steps(preprocessing):
     else:
         raise NotImplemented("Model have processing steps that haven't been implemented")
 
-def export_metadata_get_input_shape(model, model_type) -> tuple:
+def export_metadata_get_input_shape(model, model_type, output_path=None) -> tuple:
+    out_file = f"{model_type}-metadata.json"
+    if output_path:
+        os.makedirs(output_path, exist_ok=True)
+        out_file = os.path.join(output_path, out_file)
+
     preprocessing_steps = [
         get_preprocessing_steps(st) for st in model._image_processor.processings
     ]
@@ -80,7 +86,7 @@ def export_metadata_get_input_shape(model, model_type) -> tuple:
 
     labels = model.get_class_names()
 
-    res = {
+    metadata = {
             "type": model_type,
             "input_shape": input_shape,
             "post_processing": postprocessing_steps,
@@ -88,15 +94,14 @@ def export_metadata_get_input_shape(model, model_type) -> tuple:
             "labels": labels,
         }
 
-    filename = f"{model_type}-metadata.json"
-    with open(filename, "w") as f:
-        f.write(json.dumps(res))
+    with open(out_file, "w") as f:
+        f.write(json.dumps(metadata))
     return input_shape
 
-def main(model_type, opset_version):
+def main(model_type, opset_version, output_path=None):
     model = models.get(model_type, pretrained_weights="coco")
-    input_shape = export_metadata_get_input_shape(model, model_type)
-    export_onnx(model, model_type, input_shape=input_shape, opset_version=opset_version)
+    input_shape = export_metadata_get_input_shape(model, model_type, output_path=output_path)
+    export_onnx(model, model_type, output_path=output_path,  input_shape=input_shape, opset_version=opset_version)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -106,8 +111,8 @@ if __name__ == "__main__":
                         help="ONNX opset version (default=11), "
                         "this is required in order to use onnxruntime compiled with OpenCV 4.6.0, "
                         "not the same as onnxruntime version")
-    parser.add_argument("--output_path", type=str, default=None, help="Output directory to export ONNX file, "
+    parser.add_argument("--output_path", type=str, default=None, help="Output directory to export files, "
                         "will be exported to CWD if not specified")
     args = parser.parse_args()
 
-    main(args.model_type, args.opset_version)
+    main(args.model_type, args.opset_version, args.output_path)
