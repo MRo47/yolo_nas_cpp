@@ -13,12 +13,19 @@
 int main(int argc, char ** argv)
 {
   if (argc < 4) {
-    spdlog::error("Usage: {} <model_path> <metadata_path> <image_or_video_path>", argv[0]);
+    spdlog::error("Usage: {} <model_path> <metadata_path> <image_or_video_path> [--cuda]", argv[0]);
     return 1;
   }
   std::string model_path = argv[1];
   std::string metadata_path = argv[2];
-  std::string input_path = argv[3];  // Can be image or video
+  std::string input_path = argv[3];
+
+  bool use_cuda = false;
+  if (argc > 4 && std::string(argv[4]) == "--cuda") {
+    use_cuda = true;
+  } else if (argc > 4) {
+    spdlog::warn("Ignoring unknown argument: {}", argv[4]);
+  }
 
   std::ifstream file(metadata_path);
   if (!file.is_open()) {
@@ -39,8 +46,7 @@ int main(int argc, char ** argv)
   if (!image.empty()) {  // Successfully read as an image
     spdlog::info("Processing input as an image: {}", input_path);
 
-    // Initialize network for image
-    yolo_nas_cpp::DetectionNetwork network(config, model_path, image.size(), false);
+    yolo_nas_cpp::DetectionNetwork network(config, model_path, image.size(), use_cuda);
 
     // Warmup
     cv::Mat temp_image(image.size(), CV_8UC3);
@@ -103,12 +109,11 @@ int main(int argc, char ** argv)
     cap >> frame;
     if (frame.empty()) {
       spdlog::error("Could not read first frame from video/camera.");
+      cap.release();
       return 1;
     }
 
-    // Initialize network for video
-    // Assuming false for use_cuda based on original example, user can change this
-    yolo_nas_cpp::DetectionNetwork network(config, model_path, frame.size(), false);
+    yolo_nas_cpp::DetectionNetwork network(config, model_path, frame.size(), use_cuda);
 
     cv::namedWindow("Detections", cv::WINDOW_NORMAL);
 
@@ -118,13 +123,13 @@ int main(int argc, char ** argv)
     int frame_count = 0;
     std::chrono::high_resolution_clock::time_point frame_start_time;
 
-    // Video processing loop
     while (true) {
       frame_start_time = std::chrono::high_resolution_clock::now();
 
       cap >> frame;
       if (frame.empty()) {
-        break;  // End of video stream
+        spdlog::info("End of video stream.");
+        break;
       }
 
       yolo_nas_cpp::DetectionData detections = network.detect(frame);
