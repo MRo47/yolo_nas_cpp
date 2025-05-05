@@ -1,5 +1,5 @@
 # yolo_nas_cpp
-High-Performance YOLO-NAS Inference library in C++ using OpenCV DNN.
+High-Performance YOLO-NAS inference library in C++ using OpenCV DNN.
 
 ![Detections on a photo by Brett Sayles from Pexels: https://www.pexels.com/photo/women-walking-on-side-street-1119078/](images/detections.png "Detected objects on a street photo by Brett Sayles")
 
@@ -28,7 +28,7 @@ High-Performance YOLO-NAS Inference library in C++ using OpenCV DNN.
 
 ### For exporting the model
 *   Python 3
-*   `super-gradients` Python library
+*   [super-gradients](https://github.com/Deci-AI/super-gradients/tree/master)
 
 ## Model Export
 
