@@ -75,13 +75,13 @@ python3 scripts/export_yolo_nas.py --help
 
 ## Running Inference
 
-An example executable `yolo_nas_cpp` is built as part of the project. You can use it to run inference on a single image using the exported ONNX model and metadata.
+An example executable `yolo_nas_cpp` is built as part of the project. You can use it to run inference on a single image, video or webcam using the exported ONNX model and metadata.
 
 1.  **Build the library** as described in the previous section.
 2.  **Export your YOLO-NAS model and metadata** using the `export_yolo_nas.py` script.
 3.  **Run the example executable:**
     ```bash
-    ./yolo_nas_cpp <path/to/your/model.onnx> <path/to/your/metadata.json> <path/to/your/image.jpg>
+    ./yolo_nas_cpp <path/to/your/model.onnx> <path/to/your/metadata.json> <path/to/your/image.jpg | path/to/your/video.mp4 | webcam_index>
     ```
 
 ## Running Tests
