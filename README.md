@@ -20,13 +20,13 @@ High-Performance YOLO-NAS Inference in C++ using OpenCV DNN.
 *   C++ Compiler (supporting C++17 or later, e.g., g++, clang++, MSVC)
 *   CMake (version 3.10 or higher)
 *   OpenCV (with DNN module enabled, preferably built with CUDA support if you intend to use GPU acceleration)
-*   spdlog library (pulled in cmake via FetchContent)
+*   spdlog (pulled in cmake via FetchContent)
 *   GoogleTest (pulled in cmake via FetchContent, if testing enabled)
-*   nlohmann/json library
+*   nlohmann/json
 
 ### For exporting the model from super_gradients/yolo_nas in python.
-*   Python 3 (for the export script)
-*   `super-gradients` Python library (for the export script)
+*   Python 3
+*   `super-gradients` Python library
 
 TODO: steps to use the jupyter notebook.
 
