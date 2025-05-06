@@ -35,13 +35,13 @@ inline cv::Size parse_cv_size(const json & shape_arr)
  * in OpenCV's default BGR format (0-255).
  *
  * @param N The number of colors to generate. Must be positive.
- * @param saturation The saturation value for each color. Default is 0.7.
- * @param value The value (brightness) for each color. Default is 0.7.
+ * @param saturation The saturation value for each color. Default is 0.9.
+ * @param value The value (brightness) for each color. Default is 0.9.
  * @return A vector of cv::Scalar objects, where each Scalar represents a BGR color.
  *         Returns an empty vector if N <= 0.
  */
 inline std::vector<cv::Scalar> generateDistinctColors(
-  int N, float starting_hue = 180.f, float saturation = 0.7f, float value = 0.7f)
+  int N, float starting_hue = 180.f, float saturation = 0.9f, float value = 0.9f)
 {
   std::vector<cv::Scalar> colors;
   if (N <= 0) {
