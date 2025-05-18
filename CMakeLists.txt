@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Find OpenCV 
 find_package(OpenCV REQUIRED core imgproc highgui imgcodecs dnn)
+find_package(nlohmann_json REQUIRED)
 
 include(FetchContent)
 
