@@ -43,3 +43,6 @@ cd super-gradients
 git fetch origin pull/2061/head:url_fixes
 git switch url_fixes
 pip3 install -r requirements.txt && python3 -m pip install -e .
+
+# To install openvino, required for exporting models to openvino model optimizer format (.bin, .xml)
+python3 -m pip install openvino
