@@ -149,10 +149,10 @@ int main(int argc, char ** argv)
 
     if (!using_openvino) {
       network = std::make_unique<yolo_nas_cpp::DetectionNetwork>(
-        config, model_paths[0], image.size(), backend, target);
+        config, model_paths[0], frame.size(), backend, target);
     } else {
       network = std::make_unique<yolo_nas_cpp::DetectionNetwork>(
-        config, model_paths[0], model_paths[1], image.size(), target);
+        config, model_paths[0], model_paths[1], frame.size(), target);
     }
 
     cv::namedWindow("Detections", cv::WINDOW_NORMAL);
@@ -197,7 +197,9 @@ int main(int argc, char ** argv)
 
     if (frame_count > 0) {
       double average_fps = static_cast<double>(frame_count) / (total_inference_ms / 1000.0);
-      spdlog::info("Average FPS over {} frames: {:.2f}", frame_count, average_fps);
+      spdlog::info(
+        "Average inference time over {} frames: {:.2f}ms ~ {:.2f} FPS", frame_count,
+        total_inference_ms / frame_count, average_fps);
     } else {
       spdlog::warn("No frames were processed from the video stream.");
     }
