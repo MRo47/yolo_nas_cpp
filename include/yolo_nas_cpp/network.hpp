@@ -26,8 +26,7 @@ static const EnumMapping<cv::dnn::Backend> backend_mapping = {
   {cv::dnn::DNN_BACKEND_VKCOM, "VKCOM"},
   {cv::dnn::DNN_BACKEND_CUDA, "CUDA"},
   {cv::dnn::DNN_BACKEND_WEBNN, "WEBNN"},
-  {cv::dnn::DNN_BACKEND_TIMVX, "TIMVX"},
-  {cv::dnn::DNN_BACKEND_CANN, "CANN"}};
+  {cv::dnn::DNN_BACKEND_TIMVX, "TIMVX"}};
 
 static const EnumMapping<cv::dnn::Target> target_mapping = {
   {cv::dnn::DNN_TARGET_CPU, "CPU"},
@@ -39,8 +38,7 @@ static const EnumMapping<cv::dnn::Target> target_mapping = {
   {cv::dnn::DNN_TARGET_CUDA, "CUDA"},
   {cv::dnn::DNN_TARGET_CUDA_FP16, "CUDA_FP16"},
   {cv::dnn::DNN_TARGET_HDDL, "HDDL"},
-  {cv::dnn::DNN_TARGET_NPU, "NPU"},
-  {cv::dnn::DNN_TARGET_CPU_FP16, "CPU_FP16"}};
+  {cv::dnn::DNN_TARGET_NPU, "NPU"}};
 
 /**
  * @class DetectionNetwork
