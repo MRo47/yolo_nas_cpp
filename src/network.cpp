@@ -1,7 +1,5 @@
 #include "yolo_nas_cpp/network.hpp"
 
-#define SPDLOG_ACTIVE_LEVEL DEBUG
-
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
