@@ -138,13 +138,9 @@ target_link_libraries(your_detection_app PRIVATE yolo_nas_cpp::yolo_nas_cpp)
 
 ## Performance
 
-- Sysetm: Docker running on Fedora 41
-- CPU: Intel® Core™ Ultra 9 185H × 22
-- Image size: 1920x1280
+The performance of this library is compared on OpenCV built with OpenVINO and newer ONNX runtime with respect to stock OpenCV available on ubuntu 24.04. For more details check out the [OpenCV build](https://github.com/MRo47/opencv-build)
 
-| Model | GPU (FPS) | CPU (FPS) |
-| --- | --- | --- |
-| YOLO-NAS-S | - | 12.5 |
+![benchmarks](https://github.com/MRo47/opencv-build/blob/9451e23f4518789e06601f3b60759fc48a69efcf/images/benchmarks.png)
 
 ## Credits
 
