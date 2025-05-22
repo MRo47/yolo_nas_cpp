@@ -155,6 +155,13 @@ int main(int argc, char ** argv)
         config, model_paths[0], model_paths[1], frame.size(), target);
     }
 
+    // Warmup
+    spdlog::info("Starting network warmup (video mode)...");
+    for (int i = 0; i < 5; i++) {
+      network->detect(frame);
+    }
+    spdlog::info("Warmup finished.");
+
     cv::namedWindow("Detections", cv::WINDOW_NORMAL);
 
     spdlog::info("Starting video processing. Press 'q' to quit.");
@@ -164,25 +171,25 @@ int main(int argc, char ** argv)
     std::chrono::high_resolution_clock::time_point frame_start_time;
 
     while (true) {
-      frame_start_time = std::chrono::high_resolution_clock::now();
-
       cap >> frame;
       if (frame.empty()) {
         spdlog::info("End of video stream.");
         break;
       }
 
-      yolo_nas_cpp::DetectionData detections = network->detect(frame);
+      frame_start_time = std::chrono::high_resolution_clock::now();
 
-      cv::Mat output_frame =
-        yolo_nas_cpp::draw_detections(frame, detections, network->get_class_labels());
+      yolo_nas_cpp::DetectionData detections = network->detect(frame);
 
       auto frame_end_time = std::chrono::high_resolution_clock::now();
       std::chrono::duration<double, std::milli> frame_duration = frame_end_time - frame_start_time;
       double fps = 1000.0 / frame_duration.count();
       spdlog::info(
-        "Frame {}: FPS = {:.2f}, Detections = {}", frame_count, fps,
-        detections.kept_indices.size());
+        "Frame {}:  Inference time = {:.2f} ms ~ FPS = {:.2f}, Detections = {}", frame_count,
+        frame_duration.count(), fps, detections.kept_indices.size());
+
+      cv::Mat output_frame =
+        yolo_nas_cpp::draw_detections(frame, detections, network->get_class_labels());
 
       cv::imshow("Detections", output_frame);
 
