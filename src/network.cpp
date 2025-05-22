@@ -17,9 +17,20 @@ namespace yolo_nas_cpp
 
 DetectionNetwork::DetectionNetwork(
   const json & config, const std::string & onnx_model_path, const cv::Size & input_image_shape,
-  bool use_cuda)
+  const std::string & backend, const std::string & target)
 {
   spdlog::info("Initializing Detection Network...");
+
+  cv::dnn::Backend cv_backend =
+    backend_mapping.from_string(backend).value_or(cv::dnn::DNN_BACKEND_OPENCV);
+  cv::dnn::Target cv_target = target_mapping.from_string(target).value_or(cv::dnn::DNN_TARGET_CPU);
+
+  if (cv_backend == cv::dnn::DNN_BACKEND_INFERENCE_ENGINE) {
+    throw std::runtime_error(
+      "OpenVINO backend requires OpenVINO model optimizer files (.xml and .bin), use "
+      "DetectionNetwork(config, mo_xml_path, mo_bin_path, input_image_shape, target) instead.");
+  }
+
   try {
     parse_config(config, input_image_shape);
     spdlog::info("Configuration parsed and pipelines initialized.");
@@ -35,21 +46,16 @@ DetectionNetwork::DetectionNetwork(
     }
     spdlog::info("ONNX model loaded successfully from: {}", onnx_model_path);
 
-    if (use_cuda && cv::cuda::getCudaEnabledDeviceCount() > 0) {
-      spdlog::info("Attempting to use CUDA");
-      net_.setPreferableBackend(cv::dnn::DNN_BACKEND_CUDA);
-      net_.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA);
-      spdlog::info("Inference backend set to CUDA");
-    } else {
-      net_.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
-      net_.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
-      spdlog::info("Inference backend set to CPU");
-    }
+    net_.setPreferableBackend(cv_backend);
+    spdlog::info("Set inference backend to: {}", backend_mapping.to_string(cv_backend));
+    net_.setPreferableTarget(cv_target);
+    spdlog::info("Set inference target to: {}", target_mapping.to_string(cv_target));
 
     output_layer_names_ = net_.getUnconnectedOutLayersNames();
     if (output_layer_names_.empty()) {
       throw std::runtime_error(
-        "Could not get output layer names from the loaded network, required to perform inference.");
+        "Could not get output layer names from the loaded network, required to perform "
+        "inference.");
     }
 
   } catch (const cv::Exception & e) {
@@ -58,6 +64,57 @@ DetectionNetwork::DetectionNetwork(
   } catch (const std::exception & e) {
     throw std::runtime_error(
       "Error loading ONNX model '" + onnx_model_path + "': " + std::string(e.what()));
+  }
+  spdlog::info("Detection Network initialized.");
+}
+
+DetectionNetwork::DetectionNetwork(
+  const json & config, const std::string & mo_xml_path, const std::string & mo_bin_path,
+  const cv::Size & input_image_shape, const std::string & target)
+{
+  spdlog::info("Initializing Detection Network...");
+
+  cv::dnn::Target cv_target = target_mapping.from_string(target).value_or(cv::dnn::DNN_TARGET_CPU);
+
+  try {
+    parse_config(config, input_image_shape);
+    spdlog::info("Configuration parsed and pipelines initialized.");
+  } catch (const std::exception & e) {
+    throw std::runtime_error("Failed to parse network configuration: " + std::string(e.what()));
+  }
+
+  try {
+    net_ = cv::dnn::readNet(mo_xml_path, mo_bin_path);
+    if (net_.empty()) {
+      throw std::runtime_error(
+        "Network loaded from OpenVINO model optimizer files is empty. Check model paths: " +
+        mo_xml_path + " and " + mo_bin_path);
+    }
+    spdlog::info("OpenVINO model loaded successfully from: {} and {}", mo_xml_path, mo_bin_path);
+
+    if (cv_target != cv::dnn::DNN_TARGET_CPU && cv_target != cv::dnn::DNN_TARGET_OPENCL) {
+      throw std::runtime_error("Only CPU and OpenCL targets are supported with OpenVINO backend.");
+    }
+
+    net_.setPreferableBackend(cv::dnn::DNN_BACKEND_INFERENCE_ENGINE);
+    net_.setPreferableTarget(cv_target);
+    spdlog::info(
+      "Inference backend set to {}",
+      backend_mapping.to_string(cv::dnn::DNN_BACKEND_INFERENCE_ENGINE));
+    spdlog::info("Inference target set to {}", target_mapping.to_string(cv_target));
+
+    output_layer_names_ = net_.getUnconnectedOutLayersNames();
+    if (output_layer_names_.empty()) {
+      throw std::runtime_error(
+        "Could not get output layer names from the loaded network, required to perform "
+        "inference.");
+    }
+  } catch (const cv::Exception & e) {
+    throw std::runtime_error(
+      "OpenCV Error loading OpenVINO model '" + mo_xml_path + "': " + std::string(e.what()));
+  } catch (const std::exception & e) {
+    throw std::runtime_error(
+      "Error loading OpenVINO model '" + mo_xml_path + "': " + std::string(e.what()));
   }
   spdlog::info("Detection Network initialized.");
 }

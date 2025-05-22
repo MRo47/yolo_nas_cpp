@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "yolo_nas_cpp/detection_data.hpp"
+#include "yolo_nas_cpp/enum_mapping.hpp"
 #include "yolo_nas_cpp/post_processing.hpp"
 #include "yolo_nas_cpp/pre_processing.hpp"
 
@@ -16,6 +17,28 @@ namespace yolo_nas_cpp
 {
 
 using json = nlohmann::json;
+
+static const EnumMapping<cv::dnn::Backend> backend_mapping = {
+  {cv::dnn::DNN_BACKEND_DEFAULT, "DEFAULT"},
+  {cv::dnn::DNN_BACKEND_HALIDE, "HALIDE"},
+  {cv::dnn::DNN_BACKEND_INFERENCE_ENGINE, "INFERENCE_ENGINE"},
+  {cv::dnn::DNN_BACKEND_OPENCV, "OPENCV"},
+  {cv::dnn::DNN_BACKEND_VKCOM, "VKCOM"},
+  {cv::dnn::DNN_BACKEND_CUDA, "CUDA"},
+  {cv::dnn::DNN_BACKEND_WEBNN, "WEBNN"},
+  {cv::dnn::DNN_BACKEND_TIMVX, "TIMVX"}};
+
+static const EnumMapping<cv::dnn::Target> target_mapping = {
+  {cv::dnn::DNN_TARGET_CPU, "CPU"},
+  {cv::dnn::DNN_TARGET_OPENCL, "OPENCL"},
+  {cv::dnn::DNN_TARGET_OPENCL_FP16, "OPENCL_FP16"},
+  {cv::dnn::DNN_TARGET_MYRIAD, "MYRIAD"},
+  {cv::dnn::DNN_TARGET_VULKAN, "VULKAN"},
+  {cv::dnn::DNN_TARGET_FPGA, "FPGA"},
+  {cv::dnn::DNN_TARGET_CUDA, "CUDA"},
+  {cv::dnn::DNN_TARGET_CUDA_FP16, "CUDA_FP16"},
+  {cv::dnn::DNN_TARGET_HDDL, "HDDL"},
+  {cv::dnn::DNN_TARGET_NPU, "NPU"}};
 
 /**
  * @class DetectionNetwork
@@ -29,12 +52,26 @@ public:
    * @param config JSON object containing the full network configuration.
    * @param onnx_model_path Path to the ONNX model file.
    * @param input_image_shape Expected input image size (HxW).
-   * @param use_cuda If true, attempt to configure OpenCV DNN to use CUDA backend and target.
+   * @param backend The OpenCV DNN backend to use for inference.
+   * @param target The OpenCV DNN target device to use for inference.
    * @throws std::runtime_error if configuration parsing fails or the model cannot be loaded.
    */
   DetectionNetwork(
     const json & config, const std::string & onnx_model_path, const cv::Size & input_image_shape,
-    bool use_cuda);
+    const std::string & backend = "OPENCV", const std::string & target = "CPU");
+
+  /**
+   * @brief Constructs the DetectionNetwork, using OpenVINO for inference.
+   * @param config JSON object containing the full network configuration.
+   * @param mo_xml_path Path to the OpenVINO model XML file.
+   * @param mo_bin_path Path to the OpenVINO model BIN file.
+   * @param input_image_shape Expected input image size (HxW).
+   * @param target The OpenVINO target device to use for inference.
+   * @throws std::runtime_error if configuration parsing fails or the model cannot be loaded.
+   */
+  DetectionNetwork(
+    const json & config, const std::string & mo_xml_path, const std::string & mo_bin_path,
+    const cv::Size & input_image_shape, const std::string & target = "CPU");
 
   /**
    * @brief Runs the full detection pipeline on a single input image.
