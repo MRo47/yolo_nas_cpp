@@ -92,10 +92,6 @@ DetectionNetwork::DetectionNetwork(
     }
     spdlog::info("OpenVINO model loaded successfully from: {} and {}", mo_xml_path, mo_bin_path);
 
-    if (cv_target != cv::dnn::DNN_TARGET_CPU && cv_target != cv::dnn::DNN_TARGET_OPENCL) {
-      throw std::runtime_error("Only CPU and OpenCL targets are supported with OpenVINO backend.");
-    }
-
     net_.setPreferableBackend(cv::dnn::DNN_BACKEND_INFERENCE_ENGINE);
     net_.setPreferableTarget(cv_target);
     spdlog::info(
