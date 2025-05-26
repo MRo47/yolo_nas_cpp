@@ -8,18 +8,23 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Find OpenCV 
 find_package(OpenCV REQUIRED core imgproc highgui imgcodecs dnn)
 find_package(nlohmann_json REQUIRED)
+find_package(spdlog REQUIRED)
 
-include(FetchContent)
+if(spdlog_FOUND)
+    message(STATUS "spdlog found in ${spdlog_DIR}, version ${spdlog_VERSION}")
+else()
+    message(STATUS "spdlog not found, fetching v1.13.0 from github...")
+    include(FetchContent)
+    set(SPDLOG_INSTALL ON)
 
-set(SPDLOG_INSTALL ON)
+    FetchContent_Declare(
+    spdlog
+    GIT_REPOSITORY https://github.com/gabime/spdlog.git
+    GIT_TAG        v1.13.0
+    )
 
-FetchContent_Declare(
-  spdlog
-  GIT_REPOSITORY https://github.com/gabime/spdlog.git
-  GIT_TAG        v1.13.0
-)
-
-FetchContent_MakeAvailable(spdlog)
+    FetchContent_MakeAvailable(spdlog)
+endif()
 
 # Define the library
 add_library(yolo_nas_cpp
